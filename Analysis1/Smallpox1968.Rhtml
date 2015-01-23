@@ -53,8 +53,8 @@ end.rcode-->
         <div class="col-sm-11 col-sm-offset-1">
           <ol>
             <li><a href="#introduction-sect">Introduction</a></li>
-            <li><a href="#analysis-1-sect">Analysis</a></li>
-            <li><a href="#conclusions-sect">Conclusions</a></li>
+            <li><a href="#analysis-1-sect">Analysis 1: Intervention Model</a></li>
+            <li><a href="#conclusions-sect">Analysis 2: Underspecified Model</a></li>
           </ol>
         </div>
       </div>
@@ -64,47 +64,59 @@ end.rcode-->
       <a id="introduction-sect" class="anchor">
       <h2>Introduction</h2></a>
       <p>The original 1968 report by Thompson and Foege is probably the best summary, and is available
-      <a href="http://apps.who.int/iris/bitstream/10665/67462/1/WHO_SE_68.3.pdf?ua=1">here.</a></p>
+      <a href="http://apps.who.int/iris/bitstream/10665/67462/1/WHO_SE_68.3.pdf?ua=1">here.</a>
+      In this document, we fit two models. Each is a SEIR model with an overal corelation term
+      capturing contact between all of the compounds to exhibit cases. In the first, we employ
+      an intensity process with a linear temporal term to capture changes in epidemic behavior after
+      it was discovered by epidemiologists. In the second model, we disregard this intervention
+      information in favor of an intercept only model. In both cases, we examine three
+      reproductive numbers:
+      </p>
+      <ul>
+        <li>R0(t), a common temporal generalization of the basic reproductive number</li>
+        <li>Effective R0(t), a version of R0(t) which has been scaled by the susceptible fraction</li>
+        <li>Empirically Adjusted R, a <a href="https://github.com/grantbrown/EARNMC/">general reproductive number we have developed</a></li>
+      </ul>
       <div class="row">
         <div class="col-sm-11 offset-1">
           <button class="btn btn-default code-button">Show/Hide Code Block</button>
           <div class="code-and-output-block" style="display:none">
 <!--begin.rcode
-
+# Load packages
 suppressPackageStartupMessages(library(knitr))
-suppressPackageStartupMessages(library(coda)) 
+suppressPackageStartupMessages(library(coda))
 suppressPackageStartupMessages(library(spatialSEIR))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(parallel))
 
 ## Define Document Compilation Parameters
-documentCompilationMode = "release"
-#documentCompilationMode = "debug"
+#documentCompilationMode = "release"
+documentCompilationMode = "debug"
 
-## Compute number of samples/batches
+## Compute number of samples/batches, and Gelman convergence diagnostic required.
 numBurnInBatches =      ifelse(documentCompilationMode == "release", 1000,  1000)
-convergenceCriterion =  ifelse(documentCompilationMode == "release", 1.01,  5)
-convergenceSampleSize =  ifelse(documentCompilationMode == "release", 100000, 10000) 
-convergenceBatchSize =  ifelse(documentCompilationMode == "release", 100000, 10000) 
-minimumSamples =         ifelse(documentCompilationMode == "release", 300000, 50000) 
-extraR0Iterations =     ifelse(documentCompilationMode == "release", 500,   50)
-extraR0BatchSize =     ifelse(documentCompilationMode == "release", 1000,   1000)
 iterationStride =       ifelse(documentCompilationMode == "release", 1000,   100)
+convergenceCriterion =  ifelse(documentCompilationMode == "release", 1.02,   1.2)
+## Counter for samples drawn
 totalSamples = 0
 
+## Define date on which intervention began
 interventionDate = as.Date("06-01-1968", "%m-%d-%Y")
 
+## Read case data
 caseDat = read.csv("./Data/onsetData.csv")
-# Keep Only Tabernacle Members
+
+## Keep Only Tabernacle Members
 caseDat = caseDat[caseDat$Member == 1,]
 caseDates = as.Date(paste(caseDat$Onset, "1968",sep=""), format="%d%b%Y")
+
+## Get unique event dates, compoinds
 rptDate = unique(caseDates); rptDate = rptDate[order(rptDate)]
-
 compoundList = unique(caseDat$Compound); compoundList = compoundList[order(compoundList)]
+
+## Build new infectious matrix
 I_star = matrix(0, nrow = length(unique(rptDate)), ncol = length(compoundList))
-
-
 for (i in 1:nrow(caseDat))
 {
     rowIdx = which(rptDate == caseDates[i])
@@ -112,35 +124,33 @@ for (i in 1:nrow(caseDat))
     I_star[rowIdx, colIdx] = I_star[rowIdx, colIdx] + 1
 }
 
+## Define a quick barplot of the data by compound
 xvec = c(I_star)
 datevec = rep(unique(rptDate), ncol(I_star))
 compoundvec = rep(compoundList, each = nrow(I_star))
-
 incidenceData = data.frame("X"=xvec, "Date"=datevec, "Compound"=as.character(compoundvec))
-
 incidence.barplot <- qplot(x=Date, y=X, fill=Compound,
                        data=incidenceData, geom="bar", stat="identity",
                        position="dodge")
 
-## End revisions
-
+## Convenience function for dealing with cumulative data
 uncumulate = function(x)
 {
     out = c(x[2:length(x)]-x[1:(length(x)-1)])
     ifelse(out >= 0, out, 0)
 }
 
-printDat = as.character(rptDate)
-
-
+## Define combined bar plot
 figure1 = function()
 {
-
+  printDat = as.character(rptDate)
   barplot(height = as.numeric(I_star), main = "Number of Infections Per Day")
   axisLoc = seq(1, length(printDat), 2)
   axis(side = 1, at = axisLoc, labels = printDat[axisLoc])
 }
 
+## Define additional quantities of interest
+## slice off first time point as starting infectious count
 offsets = uncumulate(rptDate)
 I0 = I_star[1,]
 I_star = I_star[2:nrow(I_star),]
@@ -162,6 +172,8 @@ end.rcode-->
       <h2>Analysis</h2></a>
       <div class="row">
         <div class="col-sm-11 offset-1">
+          <p>In the code below, we read in the data, perform some initial processing,
+          and declare the functions which will perform the two analyses.</p>
           <button class="btn btn-default code-button">Show/Hide Code Block</button>
           <div class="code-and-output-block" style="display:none">
 <!--begin.rcode
@@ -170,13 +182,9 @@ end.rcode-->
 N = matrix(c(32,14,9,32,21,19,32), nrow = nrow(I_star),ncol = ncol(I_star),byrow=TRUE)
 X = matrix(1, nrow = ncol(I_star))
 
-hasIntervention = rptDate > interventionDate
-Z = cbind(hasIntervention*(rptDate-interventionDate))
-Z = Z[rep(1:nrow(Z), nrow(X)),,drop=FALSE]
-
 # Declare a function which can come up with several different starting values
 # for the model parameters. This will allow us to assess convergence.
-proposeParameters = function(seedVal, chainNumber)
+proposeParameters = function(seedVal, chainNumber, underspecified=FALSE)
 {
     set.seed(seedVal)
 
@@ -193,9 +201,6 @@ proposeParameters = function(seedVal, chainNumber)
     gamma_ei=-log(1-p_ei)
     gamma_ir=-log(1-p_ir)
 
-    # Starting value for exposure regression parameters
-    beta = rep(0, ncol(X) + ncol(Z))
-    beta[1] = 2.5 + rnorm(1,0,0.5)
 
     phi = 0.01 # Overdispersion precision
 
@@ -204,7 +209,24 @@ proposeParameters = function(seedVal, chainNumber)
     # Make a crude guess as to the true compartments:
     # S_star, E_star, R_star, and thus S,E,I and R
     DataModel = buildDataModel(I_star, type = "identity")
-    ExposureModel = buildExposureModel(X, Z, beta, betaPriorPrecision = c(0.5,0.5), betaPriorMean = c(0,0), offset=offsets)
+    if (!underspecified){
+      hasIntervention = rptDate > interventionDate
+      Z = cbind(hasIntervention*(rptDate-interventionDate))
+      Z = Z[rep(1:nrow(Z), nrow(X)),,drop=FALSE]
+      beta = rep(0, ncol(X) + ncol(Z))
+      beta[1] = 2.5 + rnorm(1,0,0.5)
+      ExposureModel = buildExposureModel(X=X, Z=Z, beta=beta,
+                                         betaPriorPrecision = c(0.5,0.5),
+                                         betaPriorMean = c(0,0), offset=offsets)
+    }
+    else{
+      beta = rep(0, ncol(X))
+      beta[1] = 2.5 + rnorm(1,0,0.5)
+      ExposureModel = buildExposureModel(X=X, Z=NA, beta=beta,
+                                         betaPriorPrecision = c(0.5),
+                                         betaPriorMean = c(0), offset=offsets,
+                                         nTpt = length(rptDate))
+    }
     ReinfectionModel = buildReinfectionModel("SEIR")
     SamplingControl = buildSamplingControl(iterationStride=iterationStride)
     InitContainer = buildInitialValueContainer(I_star, N,
@@ -214,7 +236,7 @@ proposeParameters = function(seedVal, chainNumber)
                                                reinfection = FALSE,
                                                dataType = "I_star")
     DM = matrix(1, nrow = nrow(X), ncol = nrow(X)) - diag(nrow(X))
-    DM = DM / nrow(X) 
+    DM = DM / nrow(X)
     DistanceModel = buildDistanceModel(list(DM))
     TransitionPriors = buildTransitionPriorsManually(priorAlpha_gammaEI,priorBeta_gammaEI,
                                                      priorAlpha_gammaIR,priorBeta_gammaIR)
@@ -228,14 +250,12 @@ proposeParameters = function(seedVal, chainNumber)
                 outFileName=outFileName))
 }
 
-paramsList = list(list("estimateR0"=FALSE, "traceCompartments"=TRUE, "seedVal"=123123,"chainNumber"=1),
-                  list("estimateR0"=TRUE, "traceCompartments"=TRUE, "seedVal"=1299224,"chainNumber"=2),
-                  list("estimateR0"=FALSE,"traceCompartments"=FALSE, "seedVal"=123125,"chainNumber"=3))
 
 buildModels = function(params)
 {
   library(spatialSEIR)
-  proposal <<- proposeParameters(params[["seedVal"]], params[["chainNumber"]])
+  proposal <<- proposeParameters(params[["seedVal"]], params[["chainNumber"]],
+                                 params[["underspecified"]])
   SEIRmodel =  buildSEIRModel(proposal$outFileName,
                               proposal$DataModel,
                               proposal$ExposureModel,
@@ -245,8 +265,8 @@ buildModels = function(params)
                               proposal$InitContainer,
                               proposal$SamplingControl)
   localModelObject <<- SEIRmodel
-  
-  
+
+
   SEIRmodel$setRandomSeed(params[["seedVal"]])
 
   # Do we need to keep track of compartment values for prediction?
@@ -276,10 +296,10 @@ buildModels = function(params)
   }
 
   # Burn in tuning parameters
-  
+
   runSimulation(SEIRmodel, numBatches = numBurnInBatches)
   runSimulation(SEIRmodel, numBatches = numBurnInBatches, batchSize = 100)
-  
+
   SEIRmodel$compartmentSamplingMode = 17
   SEIRmodel$parameterSamplingMode=7
   SEIRmodel$performHybridStep = 10
@@ -289,7 +309,7 @@ buildModels = function(params)
 
 
 additionalIterations = function(params)
-{ 
+{
     N = params[[1]]
     localModelObject$simulate(N)
 }
@@ -300,15 +320,17 @@ estimateR0 = function(params)
     extraIterations = params[[1]]
     batchSize = params[[2]]
 
-    R0 = array(0, dim = c(nrow(localModelObject$I_star), 
+    R0 = array(0, dim = c(nrow(localModelObject$I_star),
                           ncol(localModelObject$I_star), extraIterations))
     empiricalR0 = R0
+    effectiveR0 = R0
     for (i in 1:(extraIterations))
     {
         localModelObject$simulate(batchSize)
         for (j in (0:(nrow(localModelObject$I_star) - 1)))
         {
             R0[j,,i] = localModelObject$estimateR0(j)
+            effectiveR0[j,,i] = localModelObject$estimateEffectiveR0(j)
             empiricalR0[j,,i] = apply(localModelObject$getIntegratedGenerationMatrix(j), 1, sum)
         }
     }
@@ -321,54 +343,242 @@ estimateR0 = function(params)
     empiricalR0LB = apply(empiricalR0, 1:2, quantile, probs = 0.05)
     empiricalR0UB = apply(empiricalR0, 1:2, quantile, probs = 0.95)
 
+    effectiveR0Mean = apply(effectiveR0, 1:2, hpdEst)
+    effectiveR0LB = apply(effectiveR0, 1:2, quantile, probs = 0.05)
+    effectiveR0UB = apply(effectiveR0, 1:2, quantile, probs = 0.95)
+
     R0List = list(R0 = list(mean=R0Mean,
                              LB=R0LB,
                              UB=R0UB),
                    empiricalR0 = list(mean = empiricalR0Mean,
                                       LB = empiricalR0LB,
-                                      UB = empiricalR0UB)
+                                      UB = empiricalR0UB),
+                   effectiveR0 = list(mean = effectiveR0Mean,
+                                      LB = effectiveR0LB,
+                                      UB = effectiveR0UB)
                    )
     return(R0List)
 }
 
+
+hpdEst = function(vec)
+{
+    dens = density(vec)
+    dens$x[which.max(dens$y)]
+}
+
+# Nice colors
+alpha = 0.5
+col1 = rgb(245/255, 61/255, 0, alpha)
+col2 = rgb(184/255, 245/255, 0, alpha)
+col3 = rgb(0, 61/255, 245/255, alpha)
+plotChains = function (variableName, ...)
+{
+    alpha = 0.6
+    cex = 0.8
+    lwd = 1.2
+    plot(dat1[[variableName]], main = variableName, pch = 16,
+        cex = cex, col = col1, type = "n", ylab = "Variable Value",
+        ...)
+    ylims = par("yaxp")[1:2]
+    yrange = ylims[2] - ylims[1]
+    abline(h = seq(min(ylims) - yrange, max(ylims) + yrange,
+        length = 20), col = "lightgrey", lty = 2)
+    points(dat1[[variableName]], pch = 16, cex = cex, col = col1)
+    lines(dat1[[variableName]], col = col1, lwd = lwd)
+    points(dat2[[variableName]], pch = 16, cex = cex, col = col2)
+    lines(dat2[[variableName]], col = col2, lwd = lwd)
+    points(dat3[[variableName]], pch = 16, cex = cex, col = col3)
+    lines(dat3[[variableName]], col = col3, lwd = lwd)
+}
+
+
+
+end.rcode-->
+</div>
+
+<p>Now let's run the first analysis:</p>
+<button class="btn btn-default code-button">Show/Hide Code Block</button>
+          <div class="code-and-output-block" style="display:none">
+<!--begin.rcode
+## Parameters which govern model construction
+paramsList = list(list("estimateR0"=FALSE, "traceCompartments"=TRUE, "seedVal"=123123,
+                       "chainNumber"=1,
+                       "underspecified"=FALSE),
+                  list("estimateR0"=TRUE, "traceCompartments"=TRUE, "seedVal"=1299224,"chainNumber"=2,
+                       "underspecified"=FALSE),
+                  list("estimateR0"=FALSE,"traceCompartments"=FALSE, "seedVal"=123125,"chainNumber"=3,
+                       "underspecified"=FALSE))
+
+## Parameters which fix iterations between convergence checks
 iterationParams = list(list(20000),list(20000),list(20000))
 
-
+## Make a parallel cluster
 cl = makeCluster(3, outfile = "err.txt")
+## Send required data and functions to the nodes
 clusterExport(cl, c("proposeParameters",
-                    "X","Z",
+                    "X","interventionDate",
+                    "rptDate",
                     "N","I_star","beta", "I0",
                     "offsets", "iterationStride",
-                    "numBurnInBatches"))
-parLapply(cl, paramsList, buildModels)
+                    "numBurnInBatches", "hpdEst"))
+# Build models and store model objects in cluster nodes.
+tmp = parLapply(cl, paramsList, buildModels)
 
-
+## Run the chains
 fileNames = paste("./chain_output_smpox_", 1:3 ,".txt", sep = "")
 conv = FALSE
 while (!conv)
 {
     cat("Not converged, adding iterations...\n")
     parLapply(cl, iterationParams, additionalIterations)
-    conv = checkConvergence(fileNames[1], fileNames[2], fileNames[3], maxVal=1.02)
+    conv = checkConvergence(fileNames[1], fileNames[2], fileNames[3], maxVal=convergenceCriterion)
 }
 
-
-
+## Finish up
 R0Params = list(list(1000,100),
               list(1000,100),
               list(1000,100))
 
-R0Estimates = parLapply(cl, R0Params, estimateR0) 
+R0Estimates = parLapply(cl, R0Params, estimateR0)
+R0 = R0Estimates[[1]]$R0
+effectiveR0 = R0Estimates[[1]]$effectiveR0
+empiricalR0 = R0Estimates[[1]]$empiricalR0
+chain1=read.csv(fileNames[1])
+chain2=read.csv(fileNames[2])
+chain3=read.csv(fileNames[3])
 
 
 
 
 stopCluster(cl)
 end.rcode-->
-          </div>
+</div>
+
+<p>Below is a comparison of the three reproductive numbers.</p>
+
+<!--begin.rcode fig.width=8, fig.height=8, dpi=150, echo=FALSE
+
+ylim = c(0, max(R0$UB, effectiveR0$UB, empiricalR0$UB))
+offs = cumsum(offsets)[1:(nrow(R0$mean)-1)]
+compoundLabels = c(1,2,3,4,5,7,9)
+plotR0 = function(i){
+    plot(offs,R0$mean[1:(nrow(R0$mean)-1),i],
+         type = "l", main = paste("Compound ", compoundLabels[i], sep = ""),
+         ylim = ylim,
+         lwd=2, xlab = "Time", ylab = "Reproductive Number",col = col1)
+    abline(h = 1, col = "lightgrey", lty=2)
+    points(offs,R0$mean[1:(nrow(R0$mean)-1),i], col = col1)
+    lines(offs,effectiveR0$mean[1:(nrow(R0$mean)-1),i], lty = 1,
+    lwd=2,col=col2)
+    points(offs,effectiveR0$mean[1:(nrow(R0$mean)-1),i], col = col2)
+    lines(offs,empiricalR0$mean[1:(nrow(R0$mean)-1),i], lty = 1,
+    lwd=2,col=col3)
+    points(offs,empiricalR0$mean[1:(nrow(R0$mean)-1),i], col = col3)
+
+
+    #lines(offs,R0$UB[1:(nrow(R0$mean)-1),i], lty = 2,lwd=1,col=col1)
+    #lines(offs,R0$LB[1:(nrow(R0$mean)-1),i], lty = 2,lwd=1,col=col1)
+
+    #lines(offs,effectiveR0$UB[1:(nrow(R0$mean)-1),i], lty = 2,lwd=1,col=col2)
+    #lines(offs,effectiveR0$LB[1:(nrow(R0$mean)-1),i], lty = 2,lwd=1,col=col2)
+
+    lines(offs,empiricalR0$UB[1:(nrow(R0$mean)-1),i], lty = 2,lwd=1,col=col3)
+    lines(offs,empiricalR0$LB[1:(nrow(R0$mean)-1),i], lty = 2,lwd=1,col=col3)
+
+
+}
+layout(matrix(c(1,2,3,
+                4,5,6,
+                7,8,9), nrow = 3, byrow=TRUE), widths=c(4,4,4), heights = c(4,4,4))
+plotR0(1)
+plotR0(2)
+plotR0(3)
+plotR0(4)
+plotR0(5)
+plotR0(6)
+plotR0(7)
+
+
+par("bty"="n"); par("xaxt"="n"); par(yaxt="n"); par("xpd"=TRUE)
+plot(c(0,1), c(0,1), type ="n", main = "", xlab = "", ylab = "")
+plot(c(0,1), c(0,1), type = "n", main = "Legend", xlab ="",ylab="")
+legend(.5,.5, legend = c("R0", "Eff-R0", "Emp-R0"),
+col = c(col1, col2, col3),
+lty = rep(1,3), pch=rep(1,3), lwd = rep(2, 3), horiz=FALSE,
+xjust=0.5,yjust=0.5)
+par("bty"="o"); par("xaxt"="s"); par(yaxt="s"); par("xpd"=FALSE)
+
+
+end.rcode-->
         </div>
       </div>
+      <div class="row">
+          <div class="col-sm-11 offset-1">
+            <p>Now let's run the underspecified analysis, and see how things change.</p>
+            <button class="btn btn-default code-button">Show/Hide Code Block</button>
+            <div class="code-and-output-block" style="display:none">
+<!--begin.rcode
+  ## Parameters which govern model construction
+  paramsList = list(list("estimateR0"=FALSE, "traceCompartments"=TRUE, "seedVal"=123123,
+                         "chainNumber"=1,
+                         "underspecified"=TRUE),
+                    list("estimateR0"=TRUE, "traceCompartments"=TRUE, "seedVal"=1299224,"chainNumber"=2,
+                         "underspecified"=TRUE),
+                    list("estimateR0"=TRUE,"traceCompartments"=TRUE, "seedVal"=123125,"chainNumber"=3,
+                         "underspecified"=TRUE))
+  
+  ## Parameters which fix iterations between convergence checks
+  iterationParams = list(list(20000),list(20000),list(20000))
+  
+  ## Make a parallel cluster
+  cl = makeCluster(3, outfile = "err.txt")
+  ## Send required data and functions to the nodes
+  clusterExport(cl, c("proposeParameters",
+                      "X","interventionDate",
+                      "rptDate",
+                      "N","I_star","beta", "I0",
+                      "offsets", "iterationStride",
+                      "numBurnInBatches", "hpdEst"))
+  # Build models and store model objects in cluster nodes.
+  tmp = parLapply(cl, paramsList, buildModels)
+  
+  ## Run the chains
+  fileNames = paste("./chain_output_smpox_", 1:3 ,".txt", sep = "")
+  conv = FALSE
+  while (!conv)
+  {
+      cat("Not converged, adding iterations...\n")
+      parLapply(cl, iterationParams, additionalIterations)
+      conv = checkConvergence(fileNames[1], fileNames[2], fileNames[3], maxVal=convergenceCriterion)
+  }
+  
+  ## Finish up
+  R0Params = list(list(1000,100),
+                list(1000,100),
+                list(1000,100))
+  
+  R0Estimates = parLapply(cl, R0Params, estimateR0)
+  R0 = R0Estimates[[1]]$R0
+  effectiveR0 = R0Estimates[[1]]$effectiveR0
+  empiricalR0 = R0Estimates[[1]]$empiricalR0
+  chain1=read.csv(fileNames[1])
+  chain2=read.csv(fileNames[2])
+  chain3=read.csv(fileNames[3])
+  
+  
+  
+  
+  stopCluster(cl)
+end.rcode-->
+            </div>
+          </div>
+        </div>
+
     </div>
+
+
+
 
     <script src="./js/jquery.min.js"></script>
     <script src="./bootstrap/js/bootstrap.min.js"></script>
