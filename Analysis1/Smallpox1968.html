@@ -1,0 +1,698 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+<style type="text/css">
+.knitr.inline {
+  background-color: #f7f7f7;
+  border:solid 1px #B0B0B0;
+}
+.error {
+	font-weight: bold;
+	color: #FF0000;
+},
+.warning {
+	font-weight: bold;
+}
+.message {
+	font-style: italic;
+}
+.source, .output, .warning, .error, .message {
+	padding: 0em 1em;
+  border:solid 1px #F7F7F7;
+}
+.source {
+  background-color: #f5f5f5;
+}
+.rimage.left {
+  text-align: left;
+}
+.rimage.right {
+  text-align: right;
+}
+.rimage.center {
+  text-align: center;
+}
+.hl.num {
+  color: #AF0F91;
+}
+.hl.str {
+  color: #317ECC;
+}
+.hl.com {
+  color: #AD95AF;
+  font-style: italic;
+}
+.hl.opt {
+  color: #000000;
+}
+.hl.std {
+  color: #585858;
+}
+.hl.kwa {
+  color: #295F94;
+  font-weight: bold;
+}
+.hl.kwb {
+  color: #B05A65;
+}
+.hl.kwc {
+  color: #55aa55;
+}
+.hl.kwd {
+  color: #BC5A65;
+  font-weight: bold;
+}
+</style>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="icon" href="../../favicon.ico">
+
+    <title>Smallpox</title>
+    <link href="./bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link href="./css/smallpox.css" rel="stylesheet">
+
+  </head>
+
+  <body>
+    <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="http://grantbrown.github.io/libspatialSEIR/">libspatialSEIR</a>
+        </div>
+      </div>
+    </div>
+
+
+    <div id = "title-section" class = "container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>Another look at the 1968 Abakaliki smallpox outbreak</h1>
+          <h4>A Spatial SEIR Modeling Approach</h4>
+          <h5><a href="http://www.public-health.uiowa.edu/people/grant-brown/">Grant Brown</a></h5>
+          <h5><a href="http://ams.mines.edu/ams.php/people/facPage?id=porter/">Aaron Porter</a></h5>
+          <h5>Document Compiled:
+2015-01-23
+</h5>
+        </div>
+      </div>
+    </div>
+    <a id="toc-section-anchor" class="anchor"></a>
+    <div id="toc-section" class="container">
+      <h2>Table of Contents</h2>
+      <div class = "row">
+        <div class="col-sm-11 col-sm-offset-1">
+          <ol>
+            <li><a href="#introduction-sect">Introduction</a></li>
+            <li><a href="#analysis-1-sect">Analysis 1: Intervention Model</a></li>
+            <li><a href="#conclusions-sect">Analysis 2: Underspecified Model</a></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <a id="introduction-sect" class="anchor">
+      <h2>Introduction</h2></a>
+      <p>The original 1968 report by Thompson and Foege is probably the best summary, and is available
+      <a href="http://apps.who.int/iris/bitstream/10665/67462/1/WHO_SE_68.3.pdf?ua=1">here.</a>
+      In this document, we fit two models. Each is a SEIR model with an overal corelation term
+      capturing contact between all of the compounds to exhibit cases. In the first, we employ
+      an intensity process with a linear temporal term to capture changes in epidemic behavior after
+      it was discovered by epidemiologists. In the second model, we disregard this intervention
+      information in favor of an intercept only model. In both cases, we examine three
+      reproductive numbers:
+      </p>
+      <ul>
+        <li>R0(t), a common temporal generalization of the basic reproductive number</li>
+        <li>Effective R0(t), a version of R0(t) which has been scaled by the susceptible fraction</li>
+        <li>Empirically Adjusted R, a <a href="https://github.com/grantbrown/EARNMC/">general reproductive number we have developed</a></li>
+      </ul>
+      <div class="row">
+        <div class="col-sm-11 offset-1">
+          <button class="btn btn-default code-button">Show/Hide Code Block</button>
+          <div class="code-and-output-block" style="display:none">
+<div class="chunk" id="unnamed-chunk-2"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl com"># Load packages</span>
+<span class="hl kwd">suppressPackageStartupMessages</span><span class="hl std">(</span><span class="hl kwd">library</span><span class="hl std">(knitr))</span>
+<span class="hl kwd">suppressPackageStartupMessages</span><span class="hl std">(</span><span class="hl kwd">library</span><span class="hl std">(coda))</span>
+<span class="hl kwd">suppressPackageStartupMessages</span><span class="hl std">(</span><span class="hl kwd">library</span><span class="hl std">(spatialSEIR))</span>
+<span class="hl kwd">suppressPackageStartupMessages</span><span class="hl std">(</span><span class="hl kwd">library</span><span class="hl std">(dplyr))</span>
+<span class="hl kwd">suppressPackageStartupMessages</span><span class="hl std">(</span><span class="hl kwd">library</span><span class="hl std">(ggplot2))</span>
+<span class="hl kwd">suppressPackageStartupMessages</span><span class="hl std">(</span><span class="hl kwd">library</span><span class="hl std">(parallel))</span>
+
+<span class="hl com">## Define Document Compilation Parameters</span>
+<span class="hl std">documentCompilationMode</span> <span class="hl kwb">=</span> <span class="hl str">&quot;release&quot;</span>
+<span class="hl com">#documentCompilationMode = &quot;debug&quot;</span>
+
+<span class="hl com">## Compute number of samples/batches, and Gelman convergence diagnostic required.</span>
+<span class="hl std">numBurnInBatches</span> <span class="hl kwb">=</span>      <span class="hl kwd">ifelse</span><span class="hl std">(documentCompilationMode</span> <span class="hl opt">==</span> <span class="hl str">&quot;release&quot;</span><span class="hl std">,</span> <span class="hl num">1000</span><span class="hl std">,</span>  <span class="hl num">1000</span><span class="hl std">)</span>
+<span class="hl std">iterationStride</span> <span class="hl kwb">=</span>       <span class="hl kwd">ifelse</span><span class="hl std">(documentCompilationMode</span> <span class="hl opt">==</span> <span class="hl str">&quot;release&quot;</span><span class="hl std">,</span> <span class="hl num">1000</span><span class="hl std">,</span>   <span class="hl num">100</span><span class="hl std">)</span>
+<span class="hl std">convergenceCriterion</span> <span class="hl kwb">=</span>  <span class="hl kwd">ifelse</span><span class="hl std">(documentCompilationMode</span> <span class="hl opt">==</span> <span class="hl str">&quot;release&quot;</span><span class="hl std">,</span> <span class="hl num">1.02</span><span class="hl std">,</span>   <span class="hl num">1.2</span><span class="hl std">)</span>
+<span class="hl com">## Counter for samples drawn</span>
+<span class="hl std">totalSamples</span> <span class="hl kwb">=</span> <span class="hl num">0</span>
+
+<span class="hl com">## Define date on which intervention began</span>
+<span class="hl std">interventionDate</span> <span class="hl kwb">=</span> <span class="hl kwd">as.Date</span><span class="hl std">(</span><span class="hl str">&quot;06-01-1968&quot;</span><span class="hl std">,</span> <span class="hl str">&quot;%m-%d-%Y&quot;</span><span class="hl std">)</span>
+
+<span class="hl com">## Read case data</span>
+<span class="hl std">caseDat</span> <span class="hl kwb">=</span> <span class="hl kwd">read.csv</span><span class="hl std">(</span><span class="hl str">&quot;./Data/onsetData.csv&quot;</span><span class="hl std">)</span>
+
+<span class="hl com">## Keep Only Tabernacle Members</span>
+<span class="hl std">caseDat</span> <span class="hl kwb">=</span> <span class="hl std">caseDat[caseDat</span><span class="hl opt">$</span><span class="hl std">Member</span> <span class="hl opt">==</span> <span class="hl num">1</span><span class="hl std">,]</span>
+<span class="hl std">caseDates</span> <span class="hl kwb">=</span> <span class="hl kwd">as.Date</span><span class="hl std">(</span><span class="hl kwd">paste</span><span class="hl std">(caseDat</span><span class="hl opt">$</span><span class="hl std">Onset,</span> <span class="hl str">&quot;1968&quot;</span><span class="hl std">,</span><span class="hl kwc">sep</span><span class="hl std">=</span><span class="hl str">&quot;&quot;</span><span class="hl std">),</span> <span class="hl kwc">format</span><span class="hl std">=</span><span class="hl str">&quot;%d%b%Y&quot;</span><span class="hl std">)</span>
+
+<span class="hl com">## Get unique event dates, compoinds</span>
+<span class="hl std">rptDate</span> <span class="hl kwb">=</span> <span class="hl kwd">unique</span><span class="hl std">(caseDates); rptDate</span> <span class="hl kwb">=</span> <span class="hl std">rptDate[</span><span class="hl kwd">order</span><span class="hl std">(rptDate)]</span>
+<span class="hl std">compoundList</span> <span class="hl kwb">=</span> <span class="hl kwd">unique</span><span class="hl std">(caseDat</span><span class="hl opt">$</span><span class="hl std">Compound); compoundList</span> <span class="hl kwb">=</span> <span class="hl std">compoundList[</span><span class="hl kwd">order</span><span class="hl std">(compoundList)]</span>
+
+<span class="hl com">## Build new infectious matrix</span>
+<span class="hl std">I_star</span> <span class="hl kwb">=</span> <span class="hl kwd">matrix</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span> <span class="hl kwc">nrow</span> <span class="hl std">=</span> <span class="hl kwd">length</span><span class="hl std">(</span><span class="hl kwd">unique</span><span class="hl std">(rptDate)),</span> <span class="hl kwc">ncol</span> <span class="hl std">=</span> <span class="hl kwd">length</span><span class="hl std">(compoundList))</span>
+<span class="hl kwa">for</span> <span class="hl std">(i</span> <span class="hl kwa">in</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl kwd">nrow</span><span class="hl std">(caseDat))</span>
+<span class="hl std">{</span>
+    <span class="hl std">rowIdx</span> <span class="hl kwb">=</span> <span class="hl kwd">which</span><span class="hl std">(rptDate</span> <span class="hl opt">==</span> <span class="hl std">caseDates[i])</span>
+    <span class="hl std">colIdx</span> <span class="hl kwb">=</span> <span class="hl kwd">which</span><span class="hl std">(compoundList</span> <span class="hl opt">==</span> <span class="hl std">caseDat[i,]</span><span class="hl opt">$</span><span class="hl std">Compound)</span>
+    <span class="hl std">I_star[rowIdx, colIdx]</span> <span class="hl kwb">=</span> <span class="hl std">I_star[rowIdx, colIdx]</span> <span class="hl opt">+</span> <span class="hl num">1</span>
+<span class="hl std">}</span>
+
+<span class="hl com">## Define a quick barplot of the data by compound</span>
+<span class="hl std">xvec</span> <span class="hl kwb">=</span> <span class="hl kwd">c</span><span class="hl std">(I_star)</span>
+<span class="hl std">datevec</span> <span class="hl kwb">=</span> <span class="hl kwd">rep</span><span class="hl std">(</span><span class="hl kwd">unique</span><span class="hl std">(rptDate),</span> <span class="hl kwd">ncol</span><span class="hl std">(I_star))</span>
+<span class="hl std">compoundvec</span> <span class="hl kwb">=</span> <span class="hl kwd">rep</span><span class="hl std">(compoundList,</span> <span class="hl kwc">each</span> <span class="hl std">=</span> <span class="hl kwd">nrow</span><span class="hl std">(I_star))</span>
+<span class="hl std">incidenceData</span> <span class="hl kwb">=</span> <span class="hl kwd">data.frame</span><span class="hl std">(</span><span class="hl str">&quot;X&quot;</span><span class="hl std">=xvec,</span> <span class="hl str">&quot;Date&quot;</span><span class="hl std">=datevec,</span> <span class="hl str">&quot;Compound&quot;</span><span class="hl std">=</span><span class="hl kwd">as.character</span><span class="hl std">(compoundvec))</span>
+<span class="hl std">incidence.barplot</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">qplot</span><span class="hl std">(</span><span class="hl kwc">x</span><span class="hl std">=Date,</span> <span class="hl kwc">y</span><span class="hl std">=X,</span> <span class="hl kwc">fill</span><span class="hl std">=Compound,</span>
+                       <span class="hl kwc">data</span><span class="hl std">=incidenceData,</span> <span class="hl kwc">geom</span><span class="hl std">=</span><span class="hl str">&quot;bar&quot;</span><span class="hl std">,</span> <span class="hl kwc">stat</span><span class="hl std">=</span><span class="hl str">&quot;identity&quot;</span><span class="hl std">,</span>
+                       <span class="hl kwc">position</span><span class="hl std">=</span><span class="hl str">&quot;dodge&quot;</span><span class="hl std">)</span>
+
+<span class="hl com">## Convenience function for dealing with cumulative data</span>
+<span class="hl std">uncumulate</span> <span class="hl kwb">=</span> <span class="hl kwa">function</span><span class="hl std">(</span><span class="hl kwc">x</span><span class="hl std">)</span>
+<span class="hl std">{</span>
+    <span class="hl std">out</span> <span class="hl kwb">=</span> <span class="hl kwd">c</span><span class="hl std">(x[</span><span class="hl num">2</span><span class="hl opt">:</span><span class="hl kwd">length</span><span class="hl std">(x)]</span><span class="hl opt">-</span><span class="hl std">x[</span><span class="hl num">1</span><span class="hl opt">:</span><span class="hl std">(</span><span class="hl kwd">length</span><span class="hl std">(x)</span><span class="hl opt">-</span><span class="hl num">1</span><span class="hl std">)])</span>
+    <span class="hl kwd">ifelse</span><span class="hl std">(out</span> <span class="hl opt">&gt;=</span> <span class="hl num">0</span><span class="hl std">, out,</span> <span class="hl num">0</span><span class="hl std">)</span>
+<span class="hl std">}</span>
+
+<span class="hl com">## Define combined bar plot</span>
+<span class="hl std">figure1</span> <span class="hl kwb">=</span> <span class="hl kwa">function</span><span class="hl std">()</span>
+<span class="hl std">{</span>
+  <span class="hl std">printDat</span> <span class="hl kwb">=</span> <span class="hl kwd">as.character</span><span class="hl std">(rptDate)</span>
+  <span class="hl kwd">barplot</span><span class="hl std">(</span><span class="hl kwc">height</span> <span class="hl std">=</span> <span class="hl kwd">as.numeric</span><span class="hl std">(I_star),</span> <span class="hl kwc">main</span> <span class="hl std">=</span> <span class="hl str">&quot;Number of Infections Per Day&quot;</span><span class="hl std">)</span>
+  <span class="hl std">axisLoc</span> <span class="hl kwb">=</span> <span class="hl kwd">seq</span><span class="hl std">(</span><span class="hl num">1</span><span class="hl std">,</span> <span class="hl kwd">length</span><span class="hl std">(printDat),</span> <span class="hl num">2</span><span class="hl std">)</span>
+  <span class="hl kwd">axis</span><span class="hl std">(</span><span class="hl kwc">side</span> <span class="hl std">=</span> <span class="hl num">1</span><span class="hl std">,</span> <span class="hl kwc">at</span> <span class="hl std">= axisLoc,</span> <span class="hl kwc">labels</span> <span class="hl std">= printDat[axisLoc])</span>
+<span class="hl std">}</span>
+
+<span class="hl com">## Define additional quantities of interest</span>
+<span class="hl com">## slice off first time point as starting infectious count</span>
+<span class="hl std">offsets</span> <span class="hl kwb">=</span> <span class="hl kwd">uncumulate</span><span class="hl std">(rptDate)</span>
+<span class="hl std">I0</span> <span class="hl kwb">=</span> <span class="hl std">I_star[</span><span class="hl num">1</span><span class="hl std">,]</span>
+<span class="hl std">I_star</span> <span class="hl kwb">=</span> <span class="hl std">I_star[</span><span class="hl num">2</span><span class="hl opt">:</span><span class="hl kwd">nrow</span><span class="hl std">(I_star),]</span>
+<span class="hl std">rptDate</span> <span class="hl kwb">=</span> <span class="hl std">rptDate[</span><span class="hl num">2</span><span class="hl opt">:</span><span class="hl kwd">length</span><span class="hl std">(rptDate)]</span>
+<span class="hl std">maxIdx</span> <span class="hl kwb">=</span> <span class="hl kwd">nrow</span><span class="hl std">(I_star)</span>
+</pre></div>
+</div></div>
+          </div>
+        </div>
+
+<div class="chunk" id="unnamed-chunk-3"><div class="rimage center"><img src="figure/unnamed-chunk-3.png" title="plot of chunk unnamed-chunk-3" alt="plot of chunk unnamed-chunk-3" class="plot" /></div></div>
+      </div> <!-- End Row-->
+    </div> <!-- End Container-->
+
+    <div class="container">
+      <a id="analysis-1-sect" class="anchor">
+      <h2>Analysis</h2></a>
+      <div class="row">
+        <div class="col-sm-11 offset-1">
+          <p>In the code below, we read in the data, perform some initial processing,
+          and declare the functions which will perform the two analyses.</p>
+          <button class="btn btn-default code-button">Show/Hide Code Block</button>
+          <div class="code-and-output-block" style="display:none">
+<div class="chunk" id="unnamed-chunk-4"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl com"># Compounds 1,2,3,4,5,7,8</span>
+<span class="hl std">N</span> <span class="hl kwb">=</span> <span class="hl kwd">matrix</span><span class="hl std">(</span><span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">32</span><span class="hl std">,</span><span class="hl num">14</span><span class="hl std">,</span><span class="hl num">9</span><span class="hl std">,</span><span class="hl num">32</span><span class="hl std">,</span><span class="hl num">21</span><span class="hl std">,</span><span class="hl num">19</span><span class="hl std">,</span><span class="hl num">32</span><span class="hl std">),</span> <span class="hl kwc">nrow</span> <span class="hl std">=</span> <span class="hl kwd">nrow</span><span class="hl std">(I_star),</span><span class="hl kwc">ncol</span> <span class="hl std">=</span> <span class="hl kwd">ncol</span><span class="hl std">(I_star),</span><span class="hl kwc">byrow</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">)</span>
+<span class="hl std">X</span> <span class="hl kwb">=</span> <span class="hl kwd">matrix</span><span class="hl std">(</span><span class="hl num">1</span><span class="hl std">,</span> <span class="hl kwc">nrow</span> <span class="hl std">=</span> <span class="hl kwd">ncol</span><span class="hl std">(I_star))</span>
+
+<span class="hl com"># Declare a function which can come up with several different starting values</span>
+<span class="hl com"># for the model parameters. This will allow us to assess convergence.</span>
+<span class="hl std">proposeParameters</span> <span class="hl kwb">=</span> <span class="hl kwa">function</span><span class="hl std">(</span><span class="hl kwc">seedVal</span><span class="hl std">,</span> <span class="hl kwc">chainNumber</span><span class="hl std">,</span> <span class="hl kwc">underspecified</span><span class="hl std">=</span><span class="hl num">FALSE</span><span class="hl std">)</span>
+<span class="hl std">{</span>
+    <span class="hl kwd">set.seed</span><span class="hl std">(seedVal)</span>
+
+    <span class="hl com"># Declare prior parameters for the E to I and I to R probabilities.</span>
+    <span class="hl com"># Middle prior from LF</span>
+    <span class="hl std">priorAlpha_gammaEI</span> <span class="hl kwb">=</span> <span class="hl num">20</span><span class="hl std">;</span>
+    <span class="hl std">priorBeta_gammaEI</span> <span class="hl kwb">=</span> <span class="hl num">100</span><span class="hl std">;</span>
+    <span class="hl std">priorAlpha_gammaIR</span> <span class="hl kwb">=</span> <span class="hl num">20</span><span class="hl std">;</span>
+    <span class="hl std">priorBeta_gammaIR</span> <span class="hl kwb">=</span> <span class="hl num">140</span><span class="hl std">;</span>
+    <span class="hl com"># 2 to 21 day incubation period according to WHO</span>
+    <span class="hl std">p_ei</span> <span class="hl kwb">=</span> <span class="hl num">0.25</span> <span class="hl opt">+</span> <span class="hl kwd">rnorm</span><span class="hl std">(</span><span class="hl num">1</span><span class="hl std">,</span> <span class="hl num">0</span><span class="hl std">,</span> <span class="hl num">0.02</span><span class="hl std">)</span>
+    <span class="hl com"># Up to 7 weeks even after recovery</span>
+    <span class="hl std">p_ir</span> <span class="hl kwb">=</span> <span class="hl num">0.14</span> <span class="hl opt">+</span> <span class="hl kwd">rnorm</span><span class="hl std">(</span><span class="hl num">1</span><span class="hl std">,</span> <span class="hl num">0</span><span class="hl std">,</span> <span class="hl num">0.01</span><span class="hl std">)</span>
+    <span class="hl std">gamma_ei</span><span class="hl kwb">=</span><span class="hl opt">-</span><span class="hl kwd">log</span><span class="hl std">(</span><span class="hl num">1</span><span class="hl opt">-</span><span class="hl std">p_ei)</span>
+    <span class="hl std">gamma_ir</span><span class="hl kwb">=</span><span class="hl opt">-</span><span class="hl kwd">log</span><span class="hl std">(</span><span class="hl num">1</span><span class="hl opt">-</span><span class="hl std">p_ir)</span>
+
+
+    <span class="hl std">phi</span> <span class="hl kwb">=</span> <span class="hl num">0.01</span> <span class="hl com"># Overdispersion precision</span>
+
+    <span class="hl std">outFileName</span> <span class="hl kwb">=</span> <span class="hl kwd">paste</span><span class="hl std">(</span><span class="hl str">&quot;./chain_output_smpox_&quot;</span><span class="hl std">, chainNumber ,</span><span class="hl str">&quot;.txt&quot;</span><span class="hl std">,</span> <span class="hl kwc">sep</span> <span class="hl std">=</span> <span class="hl str">&quot;&quot;</span><span class="hl std">)</span>
+
+    <span class="hl com"># Make a crude guess as to the true compartments:</span>
+    <span class="hl com"># S_star, E_star, R_star, and thus S,E,I and R</span>
+    <span class="hl std">DataModel</span> <span class="hl kwb">=</span> <span class="hl kwd">buildDataModel</span><span class="hl std">(I_star,</span> <span class="hl kwc">type</span> <span class="hl std">=</span> <span class="hl str">&quot;identity&quot;</span><span class="hl std">)</span>
+    <span class="hl kwa">if</span> <span class="hl std">(</span><span class="hl opt">!</span><span class="hl std">underspecified){</span>
+      <span class="hl std">hasIntervention</span> <span class="hl kwb">=</span> <span class="hl std">rptDate</span> <span class="hl opt">&gt;</span> <span class="hl std">interventionDate</span>
+      <span class="hl std">Z</span> <span class="hl kwb">=</span> <span class="hl kwd">cbind</span><span class="hl std">(hasIntervention</span><span class="hl opt">*</span><span class="hl std">(rptDate</span><span class="hl opt">-</span><span class="hl std">interventionDate))</span>
+      <span class="hl std">Z</span> <span class="hl kwb">=</span> <span class="hl std">Z[</span><span class="hl kwd">rep</span><span class="hl std">(</span><span class="hl num">1</span><span class="hl opt">:</span><span class="hl kwd">nrow</span><span class="hl std">(Z),</span> <span class="hl kwd">nrow</span><span class="hl std">(X)),,</span><span class="hl kwc">drop</span><span class="hl std">=</span><span class="hl num">FALSE</span><span class="hl std">]</span>
+      <span class="hl std">beta</span> <span class="hl kwb">=</span> <span class="hl kwd">rep</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span> <span class="hl kwd">ncol</span><span class="hl std">(X)</span> <span class="hl opt">+</span> <span class="hl kwd">ncol</span><span class="hl std">(Z))</span>
+      <span class="hl std">beta[</span><span class="hl num">1</span><span class="hl std">]</span> <span class="hl kwb">=</span> <span class="hl num">2.5</span> <span class="hl opt">+</span> <span class="hl kwd">rnorm</span><span class="hl std">(</span><span class="hl num">1</span><span class="hl std">,</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">0.5</span><span class="hl std">)</span>
+      <span class="hl std">ExposureModel</span> <span class="hl kwb">=</span> <span class="hl kwd">buildExposureModel</span><span class="hl std">(</span><span class="hl kwc">X</span><span class="hl std">=X,</span> <span class="hl kwc">Z</span><span class="hl std">=Z,</span> <span class="hl kwc">beta</span><span class="hl std">=beta,</span>
+                                         <span class="hl kwc">betaPriorPrecision</span> <span class="hl std">=</span> <span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0.5</span><span class="hl std">,</span><span class="hl num">0.5</span><span class="hl std">),</span>
+                                         <span class="hl kwc">betaPriorMean</span> <span class="hl std">=</span> <span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">0</span><span class="hl std">),</span> <span class="hl kwc">offset</span><span class="hl std">=offsets)</span>
+    <span class="hl std">}</span>
+    <span class="hl kwa">else</span><span class="hl std">{</span>
+      <span class="hl std">beta</span> <span class="hl kwb">=</span> <span class="hl kwd">rep</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span> <span class="hl kwd">ncol</span><span class="hl std">(X))</span>
+      <span class="hl std">beta[</span><span class="hl num">1</span><span class="hl std">]</span> <span class="hl kwb">=</span> <span class="hl num">2.5</span> <span class="hl opt">+</span> <span class="hl kwd">rnorm</span><span class="hl std">(</span><span class="hl num">1</span><span class="hl std">,</span><span class="hl num">0</span><span class="hl std">,</span><span class="hl num">0.5</span><span class="hl std">)</span>
+      <span class="hl std">ExposureModel</span> <span class="hl kwb">=</span> <span class="hl kwd">buildExposureModel</span><span class="hl std">(</span><span class="hl kwc">X</span><span class="hl std">=X,</span> <span class="hl kwc">Z</span><span class="hl std">=</span><span class="hl num">NA</span><span class="hl std">,</span> <span class="hl kwc">beta</span><span class="hl std">=beta,</span>
+                                         <span class="hl kwc">betaPriorPrecision</span> <span class="hl std">=</span> <span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0.5</span><span class="hl std">),</span>
+                                         <span class="hl kwc">betaPriorMean</span> <span class="hl std">=</span> <span class="hl kwd">c</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">),</span> <span class="hl kwc">offset</span><span class="hl std">=offsets,</span>
+                                         <span class="hl kwc">nTpt</span> <span class="hl std">=</span> <span class="hl kwd">length</span><span class="hl std">(rptDate))</span>
+    <span class="hl std">}</span>
+    <span class="hl std">ReinfectionModel</span> <span class="hl kwb">=</span> <span class="hl kwd">buildReinfectionModel</span><span class="hl std">(</span><span class="hl str">&quot;SEIR&quot;</span><span class="hl std">)</span>
+    <span class="hl std">SamplingControl</span> <span class="hl kwb">=</span> <span class="hl kwd">buildSamplingControl</span><span class="hl std">(</span><span class="hl kwc">iterationStride</span><span class="hl std">=iterationStride)</span>
+    <span class="hl std">InitContainer</span> <span class="hl kwb">=</span> <span class="hl kwd">buildInitialValueContainer</span><span class="hl std">(I_star, N,</span>
+                                               <span class="hl kwc">S0</span> <span class="hl std">=</span> <span class="hl kwd">c</span><span class="hl std">(N[</span><span class="hl num">1</span><span class="hl std">,]</span><span class="hl opt">-</span><span class="hl std">I_star[</span><span class="hl num">1</span><span class="hl std">,]</span><span class="hl opt">-</span><span class="hl num">1</span><span class="hl std">),</span>
+                                               <span class="hl kwc">E0</span> <span class="hl std">= I0,</span>
+                                               <span class="hl kwc">I0</span> <span class="hl std">= I0,</span>
+                                               <span class="hl kwc">reinfection</span> <span class="hl std">=</span> <span class="hl num">FALSE</span><span class="hl std">,</span>
+                                               <span class="hl kwc">dataType</span> <span class="hl std">=</span> <span class="hl str">&quot;I_star&quot;</span><span class="hl std">)</span>
+    <span class="hl std">DM</span> <span class="hl kwb">=</span> <span class="hl kwd">matrix</span><span class="hl std">(</span><span class="hl num">1</span><span class="hl std">,</span> <span class="hl kwc">nrow</span> <span class="hl std">=</span> <span class="hl kwd">nrow</span><span class="hl std">(X),</span> <span class="hl kwc">ncol</span> <span class="hl std">=</span> <span class="hl kwd">nrow</span><span class="hl std">(X))</span> <span class="hl opt">-</span> <span class="hl kwd">diag</span><span class="hl std">(</span><span class="hl kwd">nrow</span><span class="hl std">(X))</span>
+    <span class="hl std">DM</span> <span class="hl kwb">=</span> <span class="hl std">DM</span> <span class="hl opt">/</span> <span class="hl kwd">nrow</span><span class="hl std">(X)</span>
+    <span class="hl std">DistanceModel</span> <span class="hl kwb">=</span> <span class="hl kwd">buildDistanceModel</span><span class="hl std">(</span><span class="hl kwd">list</span><span class="hl std">(DM))</span>
+    <span class="hl std">TransitionPriors</span> <span class="hl kwb">=</span> <span class="hl kwd">buildTransitionPriorsManually</span><span class="hl std">(priorAlpha_gammaEI,priorBeta_gammaEI,</span>
+                                                     <span class="hl std">priorAlpha_gammaIR,priorBeta_gammaIR)</span>
+    <span class="hl kwd">return</span><span class="hl std">(</span><span class="hl kwd">list</span><span class="hl std">(</span><span class="hl kwc">DataModel</span><span class="hl std">=DataModel,</span>
+                <span class="hl kwc">ExposureModel</span><span class="hl std">=ExposureModel,</span>
+                <span class="hl kwc">ReinfectionModel</span><span class="hl std">=ReinfectionModel,</span>
+                <span class="hl kwc">SamplingControl</span><span class="hl std">=SamplingControl,</span>
+                <span class="hl kwc">InitContainer</span><span class="hl std">=InitContainer,</span>
+                <span class="hl kwc">DistanceModel</span><span class="hl std">=DistanceModel,</span>
+                <span class="hl kwc">TransitionPriors</span><span class="hl std">=TransitionPriors,</span>
+                <span class="hl kwc">outFileName</span><span class="hl std">=outFileName))</span>
+<span class="hl std">}</span>
+
+
+<span class="hl std">buildModels</span> <span class="hl kwb">=</span> <span class="hl kwa">function</span><span class="hl std">(</span><span class="hl kwc">params</span><span class="hl std">)</span>
+<span class="hl std">{</span>
+  <span class="hl kwd">library</span><span class="hl std">(spatialSEIR)</span>
+  <span class="hl std">proposal</span> <span class="hl kwb">&lt;&lt;-</span> <span class="hl kwd">proposeParameters</span><span class="hl std">(params[[</span><span class="hl str">&quot;seedVal&quot;</span><span class="hl std">]], params[[</span><span class="hl str">&quot;chainNumber&quot;</span><span class="hl std">]],</span>
+                                 <span class="hl std">params[[</span><span class="hl str">&quot;underspecified&quot;</span><span class="hl std">]])</span>
+  <span class="hl std">SEIRmodel</span> <span class="hl kwb">=</span>  <span class="hl kwd">buildSEIRModel</span><span class="hl std">(proposal</span><span class="hl opt">$</span><span class="hl std">outFileName,</span>
+                              <span class="hl std">proposal</span><span class="hl opt">$</span><span class="hl std">DataModel,</span>
+                              <span class="hl std">proposal</span><span class="hl opt">$</span><span class="hl std">ExposureModel,</span>
+                              <span class="hl std">proposal</span><span class="hl opt">$</span><span class="hl std">ReinfectionModel,</span>
+                              <span class="hl std">proposal</span><span class="hl opt">$</span><span class="hl std">DistanceModel,</span>
+                              <span class="hl std">proposal</span><span class="hl opt">$</span><span class="hl std">TransitionPriors,</span>
+                              <span class="hl std">proposal</span><span class="hl opt">$</span><span class="hl std">InitContainer,</span>
+                              <span class="hl std">proposal</span><span class="hl opt">$</span><span class="hl std">SamplingControl)</span>
+  <span class="hl std">localModelObject</span> <span class="hl kwb">&lt;&lt;-</span> <span class="hl std">SEIRmodel</span>
+
+
+  <span class="hl std">SEIRmodel</span><span class="hl opt">$</span><span class="hl kwd">setRandomSeed</span><span class="hl std">(params[[</span><span class="hl str">&quot;seedVal&quot;</span><span class="hl std">]])</span>
+
+  <span class="hl com"># Do we need to keep track of compartment values for prediction?</span>
+  <span class="hl com"># No sense doing this for all of the chains.</span>
+  <span class="hl kwa">if</span> <span class="hl std">(params[[</span><span class="hl str">&quot;traceCompartments&quot;</span><span class="hl std">]])</span>
+  <span class="hl std">{</span>
+    <span class="hl std">SEIRmodel</span><span class="hl opt">$</span><span class="hl kwd">setTrace</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">)</span> <span class="hl com">#There's only one spatial location</span>
+  <span class="hl std">}</span>
+
+  <span class="hl com"># Make a helper function to run each chain, as well as update the metropolis</span>
+  <span class="hl com"># tuning parameters.</span>
+  <span class="hl std">runSimulation</span> <span class="hl kwb">&lt;&lt;-</span> <span class="hl kwa">function</span><span class="hl std">(</span><span class="hl kwc">modelObject</span><span class="hl std">,</span>
+                           <span class="hl kwc">numBatches</span><span class="hl std">=</span><span class="hl num">500</span><span class="hl std">,</span>
+                           <span class="hl kwc">batchSize</span><span class="hl std">=</span><span class="hl num">20</span><span class="hl std">,</span>
+                           <span class="hl kwc">targetAcceptanceRatio</span><span class="hl std">=</span><span class="hl num">0.2</span><span class="hl std">,</span>
+                           <span class="hl kwc">tolerance</span><span class="hl std">=</span><span class="hl num">0.05</span><span class="hl std">,</span>
+                           <span class="hl kwc">proportionChange</span> <span class="hl std">=</span> <span class="hl num">0.1</span>
+                          <span class="hl std">)</span>
+  <span class="hl std">{</span>
+      <span class="hl kwa">for</span> <span class="hl std">(batch</span> <span class="hl kwa">in</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl std">numBatches)</span>
+      <span class="hl std">{</span>
+          <span class="hl std">modelObject</span><span class="hl opt">$</span><span class="hl kwd">simulate</span><span class="hl std">(batchSize)</span>
+          <span class="hl std">modelObject</span><span class="hl opt">$</span><span class="hl kwd">updateSamplingParameters</span><span class="hl std">(targetAcceptanceRatio,</span>
+                                               <span class="hl std">tolerance,</span>
+                                               <span class="hl std">proportionChange)</span>
+      <span class="hl std">}</span>
+  <span class="hl std">}</span>
+
+  <span class="hl com"># Burn in tuning parameters</span>
+
+  <span class="hl kwd">runSimulation</span><span class="hl std">(SEIRmodel,</span> <span class="hl kwc">numBatches</span> <span class="hl std">= numBurnInBatches)</span>
+  <span class="hl kwd">runSimulation</span><span class="hl std">(SEIRmodel,</span> <span class="hl kwc">numBatches</span> <span class="hl std">= numBurnInBatches,</span> <span class="hl kwc">batchSize</span> <span class="hl std">=</span> <span class="hl num">100</span><span class="hl std">)</span>
+
+  <span class="hl std">SEIRmodel</span><span class="hl opt">$</span><span class="hl std">compartmentSamplingMode</span> <span class="hl kwb">=</span> <span class="hl num">17</span>
+  <span class="hl std">SEIRmodel</span><span class="hl opt">$</span><span class="hl std">parameterSamplingMode</span><span class="hl kwb">=</span><span class="hl num">7</span>
+  <span class="hl std">SEIRmodel</span><span class="hl opt">$</span><span class="hl std">performHybridStep</span> <span class="hl kwb">=</span> <span class="hl num">10</span>
+  <span class="hl std">SEIRmodel</span><span class="hl opt">$</span><span class="hl std">useDecorrelation</span> <span class="hl kwb">=</span> <span class="hl num">50</span>
+  <span class="hl com"># Run Simulation</span>
+<span class="hl std">}</span>
+
+
+<span class="hl std">additionalIterations</span> <span class="hl kwb">=</span> <span class="hl kwa">function</span><span class="hl std">(</span><span class="hl kwc">params</span><span class="hl std">)</span>
+<span class="hl std">{</span>
+    <span class="hl std">N</span> <span class="hl kwb">=</span> <span class="hl std">params[[</span><span class="hl num">1</span><span class="hl std">]]</span>
+    <span class="hl std">localModelObject</span><span class="hl opt">$</span><span class="hl kwd">simulate</span><span class="hl std">(N)</span>
+<span class="hl std">}</span>
+
+
+<span class="hl std">estimateR0</span> <span class="hl kwb">=</span> <span class="hl kwa">function</span><span class="hl std">(</span><span class="hl kwc">params</span><span class="hl std">)</span>
+<span class="hl std">{</span>
+    <span class="hl std">extraIterations</span> <span class="hl kwb">=</span> <span class="hl std">params[[</span><span class="hl num">1</span><span class="hl std">]]</span>
+    <span class="hl std">batchSize</span> <span class="hl kwb">=</span> <span class="hl std">params[[</span><span class="hl num">2</span><span class="hl std">]]</span>
+
+    <span class="hl std">R0</span> <span class="hl kwb">=</span> <span class="hl kwd">array</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span> <span class="hl kwc">dim</span> <span class="hl std">=</span> <span class="hl kwd">c</span><span class="hl std">(</span><span class="hl kwd">nrow</span><span class="hl std">(localModelObject</span><span class="hl opt">$</span><span class="hl std">I_star),</span>
+                          <span class="hl kwd">ncol</span><span class="hl std">(localModelObject</span><span class="hl opt">$</span><span class="hl std">I_star), extraIterations))</span>
+    <span class="hl std">empiricalR0</span> <span class="hl kwb">=</span> <span class="hl std">R0</span>
+    <span class="hl std">effectiveR0</span> <span class="hl kwb">=</span> <span class="hl std">R0</span>
+    <span class="hl kwa">for</span> <span class="hl std">(i</span> <span class="hl kwa">in</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl std">(extraIterations))</span>
+    <span class="hl std">{</span>
+        <span class="hl std">localModelObject</span><span class="hl opt">$</span><span class="hl kwd">simulate</span><span class="hl std">(batchSize)</span>
+        <span class="hl kwa">for</span> <span class="hl std">(j</span> <span class="hl kwa">in</span> <span class="hl std">(</span><span class="hl num">0</span><span class="hl opt">:</span><span class="hl std">(</span><span class="hl kwd">nrow</span><span class="hl std">(localModelObject</span><span class="hl opt">$</span><span class="hl std">I_star)</span> <span class="hl opt">-</span> <span class="hl num">1</span><span class="hl std">)))</span>
+        <span class="hl std">{</span>
+            <span class="hl std">R0[j,,i]</span> <span class="hl kwb">=</span> <span class="hl std">localModelObject</span><span class="hl opt">$</span><span class="hl kwd">estimateR0</span><span class="hl std">(j)</span>
+            <span class="hl std">effectiveR0[j,,i]</span> <span class="hl kwb">=</span> <span class="hl std">localModelObject</span><span class="hl opt">$</span><span class="hl kwd">estimateEffectiveR0</span><span class="hl std">(j)</span>
+            <span class="hl std">empiricalR0[j,,i]</span> <span class="hl kwb">=</span> <span class="hl kwd">apply</span><span class="hl std">(localModelObject</span><span class="hl opt">$</span><span class="hl kwd">getIntegratedGenerationMatrix</span><span class="hl std">(j),</span> <span class="hl num">1</span><span class="hl std">, sum)</span>
+        <span class="hl std">}</span>
+    <span class="hl std">}</span>
+
+    <span class="hl std">R0Mean</span> <span class="hl kwb">=</span> <span class="hl kwd">apply</span><span class="hl std">(R0,</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl num">2</span><span class="hl std">, mean)</span>
+    <span class="hl std">R0LB</span> <span class="hl kwb">=</span> <span class="hl kwd">apply</span><span class="hl std">(R0,</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl num">2</span><span class="hl std">, quantile,</span> <span class="hl kwc">probs</span> <span class="hl std">=</span> <span class="hl num">0.05</span><span class="hl std">)</span>
+    <span class="hl std">R0UB</span> <span class="hl kwb">=</span> <span class="hl kwd">apply</span><span class="hl std">(R0,</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl num">2</span><span class="hl std">, quantile,</span> <span class="hl kwc">probs</span> <span class="hl std">=</span> <span class="hl num">0.95</span><span class="hl std">)</span>
+
+    <span class="hl std">empiricalR0Mean</span> <span class="hl kwb">=</span> <span class="hl kwd">apply</span><span class="hl std">(empiricalR0,</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl num">2</span><span class="hl std">, hpdEst)</span>
+    <span class="hl std">empiricalR0LB</span> <span class="hl kwb">=</span> <span class="hl kwd">apply</span><span class="hl std">(empiricalR0,</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl num">2</span><span class="hl std">, quantile,</span> <span class="hl kwc">probs</span> <span class="hl std">=</span> <span class="hl num">0.05</span><span class="hl std">)</span>
+    <span class="hl std">empiricalR0UB</span> <span class="hl kwb">=</span> <span class="hl kwd">apply</span><span class="hl std">(empiricalR0,</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl num">2</span><span class="hl std">, quantile,</span> <span class="hl kwc">probs</span> <span class="hl std">=</span> <span class="hl num">0.95</span><span class="hl std">)</span>
+
+    <span class="hl std">effectiveR0Mean</span> <span class="hl kwb">=</span> <span class="hl kwd">apply</span><span class="hl std">(effectiveR0,</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl num">2</span><span class="hl std">, hpdEst)</span>
+    <span class="hl std">effectiveR0LB</span> <span class="hl kwb">=</span> <span class="hl kwd">apply</span><span class="hl std">(effectiveR0,</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl num">2</span><span class="hl std">, quantile,</span> <span class="hl kwc">probs</span> <span class="hl std">=</span> <span class="hl num">0.05</span><span class="hl std">)</span>
+    <span class="hl std">effectiveR0UB</span> <span class="hl kwb">=</span> <span class="hl kwd">apply</span><span class="hl std">(effectiveR0,</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl num">2</span><span class="hl std">, quantile,</span> <span class="hl kwc">probs</span> <span class="hl std">=</span> <span class="hl num">0.95</span><span class="hl std">)</span>
+
+    <span class="hl std">R0List</span> <span class="hl kwb">=</span> <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl kwc">R0</span> <span class="hl std">=</span> <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl kwc">mean</span><span class="hl std">=R0Mean,</span>
+                             <span class="hl kwc">LB</span><span class="hl std">=R0LB,</span>
+                             <span class="hl kwc">UB</span><span class="hl std">=R0UB),</span>
+                   <span class="hl kwc">empiricalR0</span> <span class="hl std">=</span> <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl kwc">mean</span> <span class="hl std">= empiricalR0Mean,</span>
+                                      <span class="hl kwc">LB</span> <span class="hl std">= empiricalR0LB,</span>
+                                      <span class="hl kwc">UB</span> <span class="hl std">= empiricalR0UB),</span>
+                   <span class="hl kwc">effectiveR0</span> <span class="hl std">=</span> <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl kwc">mean</span> <span class="hl std">= effectiveR0Mean,</span>
+                                      <span class="hl kwc">LB</span> <span class="hl std">= effectiveR0LB,</span>
+                                      <span class="hl kwc">UB</span> <span class="hl std">= effectiveR0UB)</span>
+                   <span class="hl std">)</span>
+    <span class="hl kwd">return</span><span class="hl std">(R0List)</span>
+<span class="hl std">}</span>
+
+
+<span class="hl std">hpdEst</span> <span class="hl kwb">=</span> <span class="hl kwa">function</span><span class="hl std">(</span><span class="hl kwc">vec</span><span class="hl std">)</span>
+<span class="hl std">{</span>
+    <span class="hl std">dens</span> <span class="hl kwb">=</span> <span class="hl kwd">density</span><span class="hl std">(vec)</span>
+    <span class="hl std">dens</span><span class="hl opt">$</span><span class="hl std">x[</span><span class="hl kwd">which.max</span><span class="hl std">(dens</span><span class="hl opt">$</span><span class="hl std">y)]</span>
+<span class="hl std">}</span>
+
+<span class="hl com"># Nice colors</span>
+<span class="hl std">alpha</span> <span class="hl kwb">=</span> <span class="hl num">0.5</span>
+<span class="hl std">col1</span> <span class="hl kwb">=</span> <span class="hl kwd">rgb</span><span class="hl std">(</span><span class="hl num">245</span><span class="hl opt">/</span><span class="hl num">255</span><span class="hl std">,</span> <span class="hl num">61</span><span class="hl opt">/</span><span class="hl num">255</span><span class="hl std">,</span> <span class="hl num">0</span><span class="hl std">, alpha)</span>
+<span class="hl std">col2</span> <span class="hl kwb">=</span> <span class="hl kwd">rgb</span><span class="hl std">(</span><span class="hl num">184</span><span class="hl opt">/</span><span class="hl num">255</span><span class="hl std">,</span> <span class="hl num">245</span><span class="hl opt">/</span><span class="hl num">255</span><span class="hl std">,</span> <span class="hl num">0</span><span class="hl std">, alpha)</span>
+<span class="hl std">col3</span> <span class="hl kwb">=</span> <span class="hl kwd">rgb</span><span class="hl std">(</span><span class="hl num">0</span><span class="hl std">,</span> <span class="hl num">61</span><span class="hl opt">/</span><span class="hl num">255</span><span class="hl std">,</span> <span class="hl num">245</span><span class="hl opt">/</span><span class="hl num">255</span><span class="hl std">, alpha)</span>
+<span class="hl std">plotChains</span> <span class="hl kwb">=</span> <span class="hl kwa">function</span> <span class="hl std">(</span><span class="hl kwc">variableName</span><span class="hl std">,</span> <span class="hl kwc">...</span><span class="hl std">)</span>
+<span class="hl std">{</span>
+    <span class="hl std">alpha</span> <span class="hl kwb">=</span> <span class="hl num">0.6</span>
+    <span class="hl std">cex</span> <span class="hl kwb">=</span> <span class="hl num">0.8</span>
+    <span class="hl std">lwd</span> <span class="hl kwb">=</span> <span class="hl num">1.2</span>
+    <span class="hl kwd">plot</span><span class="hl std">(dat1[[variableName]],</span> <span class="hl kwc">main</span> <span class="hl std">= variableName,</span> <span class="hl kwc">pch</span> <span class="hl std">=</span> <span class="hl num">16</span><span class="hl std">,</span>
+        <span class="hl kwc">cex</span> <span class="hl std">= cex,</span> <span class="hl kwc">col</span> <span class="hl std">= col1,</span> <span class="hl kwc">type</span> <span class="hl std">=</span> <span class="hl str">&quot;n&quot;</span><span class="hl std">,</span> <span class="hl kwc">ylab</span> <span class="hl std">=</span> <span class="hl str">&quot;Variable Value&quot;</span><span class="hl std">,</span>
+        <span class="hl std">...)</span>
+    <span class="hl std">ylims</span> <span class="hl kwb">=</span> <span class="hl kwd">par</span><span class="hl std">(</span><span class="hl str">&quot;yaxp&quot;</span><span class="hl std">)[</span><span class="hl num">1</span><span class="hl opt">:</span><span class="hl num">2</span><span class="hl std">]</span>
+    <span class="hl std">yrange</span> <span class="hl kwb">=</span> <span class="hl std">ylims[</span><span class="hl num">2</span><span class="hl std">]</span> <span class="hl opt">-</span> <span class="hl std">ylims[</span><span class="hl num">1</span><span class="hl std">]</span>
+    <span class="hl kwd">abline</span><span class="hl std">(</span><span class="hl kwc">h</span> <span class="hl std">=</span> <span class="hl kwd">seq</span><span class="hl std">(</span><span class="hl kwd">min</span><span class="hl std">(ylims)</span> <span class="hl opt">-</span> <span class="hl std">yrange,</span> <span class="hl kwd">max</span><span class="hl std">(ylims)</span> <span class="hl opt">+</span> <span class="hl std">yrange,</span>
+        <span class="hl kwc">length</span> <span class="hl std">=</span> <span class="hl num">20</span><span class="hl std">),</span> <span class="hl kwc">col</span> <span class="hl std">=</span> <span class="hl str">&quot;lightgrey&quot;</span><span class="hl std">,</span> <span class="hl kwc">lty</span> <span class="hl std">=</span> <span class="hl num">2</span><span class="hl std">)</span>
+    <span class="hl kwd">points</span><span class="hl std">(dat1[[variableName]],</span> <span class="hl kwc">pch</span> <span class="hl std">=</span> <span class="hl num">16</span><span class="hl std">,</span> <span class="hl kwc">cex</span> <span class="hl std">= cex,</span> <span class="hl kwc">col</span> <span class="hl std">= col1)</span>
+    <span class="hl kwd">lines</span><span class="hl std">(dat1[[variableName]],</span> <span class="hl kwc">col</span> <span class="hl std">= col1,</span> <span class="hl kwc">lwd</span> <span class="hl std">= lwd)</span>
+    <span class="hl kwd">points</span><span class="hl std">(dat2[[variableName]],</span> <span class="hl kwc">pch</span> <span class="hl std">=</span> <span class="hl num">16</span><span class="hl std">,</span> <span class="hl kwc">cex</span> <span class="hl std">= cex,</span> <span class="hl kwc">col</span> <span class="hl std">= col2)</span>
+    <span class="hl kwd">lines</span><span class="hl std">(dat2[[variableName]],</span> <span class="hl kwc">col</span> <span class="hl std">= col2,</span> <span class="hl kwc">lwd</span> <span class="hl std">= lwd)</span>
+    <span class="hl kwd">points</span><span class="hl std">(dat3[[variableName]],</span> <span class="hl kwc">pch</span> <span class="hl std">=</span> <span class="hl num">16</span><span class="hl std">,</span> <span class="hl kwc">cex</span> <span class="hl std">= cex,</span> <span class="hl kwc">col</span> <span class="hl std">= col3)</span>
+    <span class="hl kwd">lines</span><span class="hl std">(dat3[[variableName]],</span> <span class="hl kwc">col</span> <span class="hl std">= col3,</span> <span class="hl kwc">lwd</span> <span class="hl std">= lwd)</span>
+<span class="hl std">}</span>
+</pre></div>
+</div></div>
+</div>
+
+<p>Now let's run the first analysis:</p>
+<button class="btn btn-default code-button">Show/Hide Code Block</button>
+          <div class="code-and-output-block" style="display:none">
+<div class="chunk" id="unnamed-chunk-5"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl com">## Parameters which govern model construction</span>
+<span class="hl std">paramsList</span> <span class="hl kwb">=</span> <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl kwd">list</span><span class="hl std">(</span><span class="hl str">&quot;estimateR0&quot;</span><span class="hl std">=</span><span class="hl num">FALSE</span><span class="hl std">,</span> <span class="hl str">&quot;traceCompartments&quot;</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">,</span> <span class="hl str">&quot;seedVal&quot;</span><span class="hl std">=</span><span class="hl num">123123</span><span class="hl std">,</span>
+                       <span class="hl str">&quot;chainNumber&quot;</span><span class="hl std">=</span><span class="hl num">1</span><span class="hl std">,</span>
+                       <span class="hl str">&quot;underspecified&quot;</span><span class="hl std">=</span><span class="hl num">FALSE</span><span class="hl std">),</span>
+                  <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl str">&quot;estimateR0&quot;</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">,</span> <span class="hl str">&quot;traceCompartments&quot;</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">,</span> <span class="hl str">&quot;seedVal&quot;</span><span class="hl std">=</span><span class="hl num">1299224</span><span class="hl std">,</span><span class="hl str">&quot;chainNumber&quot;</span><span class="hl std">=</span><span class="hl num">2</span><span class="hl std">,</span>
+                       <span class="hl str">&quot;underspecified&quot;</span><span class="hl std">=</span><span class="hl num">FALSE</span><span class="hl std">),</span>
+                  <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl str">&quot;estimateR0&quot;</span><span class="hl std">=</span><span class="hl num">FALSE</span><span class="hl std">,</span><span class="hl str">&quot;traceCompartments&quot;</span><span class="hl std">=</span><span class="hl num">FALSE</span><span class="hl std">,</span> <span class="hl str">&quot;seedVal&quot;</span><span class="hl std">=</span><span class="hl num">123125</span><span class="hl std">,</span><span class="hl str">&quot;chainNumber&quot;</span><span class="hl std">=</span><span class="hl num">3</span><span class="hl std">,</span>
+                       <span class="hl str">&quot;underspecified&quot;</span><span class="hl std">=</span><span class="hl num">FALSE</span><span class="hl std">))</span>
+
+<span class="hl com">## Parameters which fix iterations between convergence checks</span>
+<span class="hl std">iterationParams</span> <span class="hl kwb">=</span> <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl kwd">list</span><span class="hl std">(</span><span class="hl num">20000</span><span class="hl std">),</span><span class="hl kwd">list</span><span class="hl std">(</span><span class="hl num">20000</span><span class="hl std">),</span><span class="hl kwd">list</span><span class="hl std">(</span><span class="hl num">20000</span><span class="hl std">))</span>
+
+<span class="hl com">## Make a parallel cluster</span>
+<span class="hl std">cl</span> <span class="hl kwb">=</span> <span class="hl kwd">makeCluster</span><span class="hl std">(</span><span class="hl num">3</span><span class="hl std">,</span> <span class="hl kwc">outfile</span> <span class="hl std">=</span> <span class="hl str">&quot;err.txt&quot;</span><span class="hl std">)</span>
+<span class="hl com">## Send required data and functions to the nodes</span>
+<span class="hl kwd">clusterExport</span><span class="hl std">(cl,</span> <span class="hl kwd">c</span><span class="hl std">(</span><span class="hl str">&quot;proposeParameters&quot;</span><span class="hl std">,</span>
+                    <span class="hl str">&quot;X&quot;</span><span class="hl std">,</span><span class="hl str">&quot;interventionDate&quot;</span><span class="hl std">,</span>
+                    <span class="hl str">&quot;rptDate&quot;</span><span class="hl std">,</span>
+                    <span class="hl str">&quot;N&quot;</span><span class="hl std">,</span><span class="hl str">&quot;I_star&quot;</span><span class="hl std">,</span><span class="hl str">&quot;beta&quot;</span><span class="hl std">,</span> <span class="hl str">&quot;I0&quot;</span><span class="hl std">,</span>
+                    <span class="hl str">&quot;offsets&quot;</span><span class="hl std">,</span> <span class="hl str">&quot;iterationStride&quot;</span><span class="hl std">,</span>
+                    <span class="hl str">&quot;numBurnInBatches&quot;</span><span class="hl std">,</span> <span class="hl str">&quot;hpdEst&quot;</span><span class="hl std">))</span>
+<span class="hl com"># Build models and store model objects in cluster nodes.</span>
+<span class="hl std">tmp</span> <span class="hl kwb">=</span> <span class="hl kwd">parLapply</span><span class="hl std">(cl, paramsList, buildModels)</span>
+
+<span class="hl com">## Run the chains</span>
+<span class="hl std">fileNames</span> <span class="hl kwb">=</span> <span class="hl kwd">paste</span><span class="hl std">(</span><span class="hl str">&quot;./chain_output_smpox_&quot;</span><span class="hl std">,</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl num">3</span> <span class="hl std">,</span><span class="hl str">&quot;.txt&quot;</span><span class="hl std">,</span> <span class="hl kwc">sep</span> <span class="hl std">=</span> <span class="hl str">&quot;&quot;</span><span class="hl std">)</span>
+<span class="hl std">conv</span> <span class="hl kwb">=</span> <span class="hl num">FALSE</span>
+<span class="hl kwa">while</span> <span class="hl std">(</span><span class="hl opt">!</span><span class="hl std">conv)</span>
+<span class="hl std">{</span>
+    <span class="hl kwd">cat</span><span class="hl std">(</span><span class="hl str">&quot;Not converged, adding iterations...\n&quot;</span><span class="hl std">)</span>
+    <span class="hl kwd">parLapply</span><span class="hl std">(cl, iterationParams, additionalIterations)</span>
+    <span class="hl std">conv</span> <span class="hl kwb">=</span> <span class="hl kwd">checkConvergence</span><span class="hl std">(fileNames[</span><span class="hl num">1</span><span class="hl std">], fileNames[</span><span class="hl num">2</span><span class="hl std">], fileNames[</span><span class="hl num">3</span><span class="hl std">],</span> <span class="hl kwc">maxVal</span><span class="hl std">=convergenceCriterion)</span>
+<span class="hl std">}</span>
+</pre></div>
+<div class="output"><pre class="knitr r">## Not converged, adding iterations...
+## Convergence Criterion: 1.42, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.13, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.06, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.03, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.02, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.1, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.15, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.16, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.18, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.17, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.15, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.2, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.17, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.19, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.18, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.16, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.13, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.13, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.14, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.12, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.08, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.06, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.04, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.03, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.03, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.02, param: gamma_ei
+</pre></div>
+<div class="source"><pre class="knitr r"><span class="hl com">## Finish up</span>
+<span class="hl std">R0Params</span> <span class="hl kwb">=</span> <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl kwd">list</span><span class="hl std">(</span><span class="hl num">1000</span><span class="hl std">,</span><span class="hl num">100</span><span class="hl std">),</span>
+              <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl num">1000</span><span class="hl std">,</span><span class="hl num">100</span><span class="hl std">),</span>
+              <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl num">1000</span><span class="hl std">,</span><span class="hl num">100</span><span class="hl std">))</span>
+
+<span class="hl std">R0Estimates</span> <span class="hl kwb">=</span> <span class="hl kwd">parLapply</span><span class="hl std">(cl, R0Params, estimateR0)</span>
+<span class="hl std">R0</span> <span class="hl kwb">=</span> <span class="hl std">R0Estimates[[</span><span class="hl num">1</span><span class="hl std">]]</span><span class="hl opt">$</span><span class="hl std">R0</span>
+<span class="hl std">effectiveR0</span> <span class="hl kwb">=</span> <span class="hl std">R0Estimates[[</span><span class="hl num">1</span><span class="hl std">]]</span><span class="hl opt">$</span><span class="hl std">effectiveR0</span>
+<span class="hl std">empiricalR0</span> <span class="hl kwb">=</span> <span class="hl std">R0Estimates[[</span><span class="hl num">1</span><span class="hl std">]]</span><span class="hl opt">$</span><span class="hl std">empiricalR0</span>
+<span class="hl std">chain1</span><span class="hl kwb">=</span><span class="hl kwd">read.csv</span><span class="hl std">(fileNames[</span><span class="hl num">1</span><span class="hl std">])</span>
+<span class="hl std">chain2</span><span class="hl kwb">=</span><span class="hl kwd">read.csv</span><span class="hl std">(fileNames[</span><span class="hl num">2</span><span class="hl std">])</span>
+<span class="hl std">chain3</span><span class="hl kwb">=</span><span class="hl kwd">read.csv</span><span class="hl std">(fileNames[</span><span class="hl num">3</span><span class="hl std">])</span>
+
+
+
+
+<span class="hl kwd">stopCluster</span><span class="hl std">(cl)</span>
+</pre></div>
+</div></div>
+</div>
+
+<p>Below is a comparison of the three reproductive numbers.</p>
+
+<div class="chunk" id="unnamed-chunk-6"><div class="rimage default"><img src="figure/unnamed-chunk-6.png" title="plot of chunk unnamed-chunk-6" alt="plot of chunk unnamed-chunk-6" class="plot" /></div></div>
+        </div>
+      </div>
+      <div class="row">
+          <div class="col-sm-11 offset-1">
+            <p>Now let's run the underspecified analysis, and see how things change.</p>
+            <button class="btn btn-default code-button">Show/Hide Code Block</button>
+            <div class="code-and-output-block" style="display:none">
+<div class="chunk" id="unnamed-chunk-7"><div class="rcode"><div class="source"><pre class="knitr r">  <span class="hl com">## Parameters which govern model construction</span>
+  <span class="hl std">paramsList</span> <span class="hl kwb">=</span> <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl kwd">list</span><span class="hl std">(</span><span class="hl str">&quot;estimateR0&quot;</span><span class="hl std">=</span><span class="hl num">FALSE</span><span class="hl std">,</span> <span class="hl str">&quot;traceCompartments&quot;</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">,</span> <span class="hl str">&quot;seedVal&quot;</span><span class="hl std">=</span><span class="hl num">123123</span><span class="hl std">,</span>
+                         <span class="hl str">&quot;chainNumber&quot;</span><span class="hl std">=</span><span class="hl num">1</span><span class="hl std">,</span>
+                         <span class="hl str">&quot;underspecified&quot;</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">),</span>
+                    <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl str">&quot;estimateR0&quot;</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">,</span> <span class="hl str">&quot;traceCompartments&quot;</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">,</span> <span class="hl str">&quot;seedVal&quot;</span><span class="hl std">=</span><span class="hl num">1299224</span><span class="hl std">,</span><span class="hl str">&quot;chainNumber&quot;</span><span class="hl std">=</span><span class="hl num">2</span><span class="hl std">,</span>
+                         <span class="hl str">&quot;underspecified&quot;</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">),</span>
+                    <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl str">&quot;estimateR0&quot;</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">,</span><span class="hl str">&quot;traceCompartments&quot;</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">,</span> <span class="hl str">&quot;seedVal&quot;</span><span class="hl std">=</span><span class="hl num">123125</span><span class="hl std">,</span><span class="hl str">&quot;chainNumber&quot;</span><span class="hl std">=</span><span class="hl num">3</span><span class="hl std">,</span>
+                         <span class="hl str">&quot;underspecified&quot;</span><span class="hl std">=</span><span class="hl num">TRUE</span><span class="hl std">))</span>
+
+  <span class="hl com">## Parameters which fix iterations between convergence checks</span>
+  <span class="hl std">iterationParams</span> <span class="hl kwb">=</span> <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl kwd">list</span><span class="hl std">(</span><span class="hl num">20000</span><span class="hl std">),</span><span class="hl kwd">list</span><span class="hl std">(</span><span class="hl num">20000</span><span class="hl std">),</span><span class="hl kwd">list</span><span class="hl std">(</span><span class="hl num">20000</span><span class="hl std">))</span>
+
+  <span class="hl com">## Make a parallel cluster</span>
+  <span class="hl std">cl</span> <span class="hl kwb">=</span> <span class="hl kwd">makeCluster</span><span class="hl std">(</span><span class="hl num">3</span><span class="hl std">,</span> <span class="hl kwc">outfile</span> <span class="hl std">=</span> <span class="hl str">&quot;err.txt&quot;</span><span class="hl std">)</span>
+  <span class="hl com">## Send required data and functions to the nodes</span>
+  <span class="hl kwd">clusterExport</span><span class="hl std">(cl,</span> <span class="hl kwd">c</span><span class="hl std">(</span><span class="hl str">&quot;proposeParameters&quot;</span><span class="hl std">,</span>
+                      <span class="hl str">&quot;X&quot;</span><span class="hl std">,</span><span class="hl str">&quot;interventionDate&quot;</span><span class="hl std">,</span>
+                      <span class="hl str">&quot;rptDate&quot;</span><span class="hl std">,</span>
+                      <span class="hl str">&quot;N&quot;</span><span class="hl std">,</span><span class="hl str">&quot;I_star&quot;</span><span class="hl std">,</span><span class="hl str">&quot;beta&quot;</span><span class="hl std">,</span> <span class="hl str">&quot;I0&quot;</span><span class="hl std">,</span>
+                      <span class="hl str">&quot;offsets&quot;</span><span class="hl std">,</span> <span class="hl str">&quot;iterationStride&quot;</span><span class="hl std">,</span>
+                      <span class="hl str">&quot;numBurnInBatches&quot;</span><span class="hl std">,</span> <span class="hl str">&quot;hpdEst&quot;</span><span class="hl std">))</span>
+  <span class="hl com"># Build models and store model objects in cluster nodes.</span>
+  <span class="hl std">tmp</span> <span class="hl kwb">=</span> <span class="hl kwd">parLapply</span><span class="hl std">(cl, paramsList, buildModels)</span>
+
+  <span class="hl com">## Run the chains</span>
+  <span class="hl std">fileNames</span> <span class="hl kwb">=</span> <span class="hl kwd">paste</span><span class="hl std">(</span><span class="hl str">&quot;./chain_output_smpox_&quot;</span><span class="hl std">,</span> <span class="hl num">1</span><span class="hl opt">:</span><span class="hl num">3</span> <span class="hl std">,</span><span class="hl str">&quot;.txt&quot;</span><span class="hl std">,</span> <span class="hl kwc">sep</span> <span class="hl std">=</span> <span class="hl str">&quot;&quot;</span><span class="hl std">)</span>
+  <span class="hl std">conv</span> <span class="hl kwb">=</span> <span class="hl num">FALSE</span>
+  <span class="hl kwa">while</span> <span class="hl std">(</span><span class="hl opt">!</span><span class="hl std">conv)</span>
+  <span class="hl std">{</span>
+      <span class="hl kwd">cat</span><span class="hl std">(</span><span class="hl str">&quot;Not converged, adding iterations...\n&quot;</span><span class="hl std">)</span>
+      <span class="hl kwd">parLapply</span><span class="hl std">(cl, iterationParams, additionalIterations)</span>
+      <span class="hl std">conv</span> <span class="hl kwb">=</span> <span class="hl kwd">checkConvergence</span><span class="hl std">(fileNames[</span><span class="hl num">1</span><span class="hl std">], fileNames[</span><span class="hl num">2</span><span class="hl std">], fileNames[</span><span class="hl num">3</span><span class="hl std">],</span> <span class="hl kwc">maxVal</span><span class="hl std">=convergenceCriterion)</span>
+  <span class="hl std">}</span>
+</pre></div>
+<div class="output"><pre class="knitr r">## Not converged, adding iterations...
+## Convergence Criterion: 2.1, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.97, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.62, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.43, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.37, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.28, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.24, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.21, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.1, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.07, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.07, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.1, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.1, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.06, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.05, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.03, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.03, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.03, param: gamma_ei
+## Not converged, adding iterations...
+## Convergence Criterion: 1.02, param: gamma_ei
+</pre></div>
+<div class="source"><pre class="knitr r">  <span class="hl com">## Finish up</span>
+  <span class="hl std">R0Params</span> <span class="hl kwb">=</span> <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl kwd">list</span><span class="hl std">(</span><span class="hl num">1000</span><span class="hl std">,</span><span class="hl num">100</span><span class="hl std">),</span>
+                <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl num">1000</span><span class="hl std">,</span><span class="hl num">100</span><span class="hl std">),</span>
+                <span class="hl kwd">list</span><span class="hl std">(</span><span class="hl num">1000</span><span class="hl std">,</span><span class="hl num">100</span><span class="hl std">))</span>
+
+  <span class="hl std">R0Estimates</span> <span class="hl kwb">=</span> <span class="hl kwd">parLapply</span><span class="hl std">(cl, R0Params, estimateR0)</span>
+  <span class="hl std">R0</span> <span class="hl kwb">=</span> <span class="hl std">R0Estimates[[</span><span class="hl num">1</span><span class="hl std">]]</span><span class="hl opt">$</span><span class="hl std">R0</span>
+  <span class="hl std">effectiveR0</span> <span class="hl kwb">=</span> <span class="hl std">R0Estimates[[</span><span class="hl num">1</span><span class="hl std">]]</span><span class="hl opt">$</span><span class="hl std">effectiveR0</span>
+  <span class="hl std">empiricalR0</span> <span class="hl kwb">=</span> <span class="hl std">R0Estimates[[</span><span class="hl num">1</span><span class="hl std">]]</span><span class="hl opt">$</span><span class="hl std">empiricalR0</span>
+  <span class="hl std">chain1</span><span class="hl kwb">=</span><span class="hl kwd">read.csv</span><span class="hl std">(fileNames[</span><span class="hl num">1</span><span class="hl std">])</span>
+  <span class="hl std">chain2</span><span class="hl kwb">=</span><span class="hl kwd">read.csv</span><span class="hl std">(fileNames[</span><span class="hl num">2</span><span class="hl std">])</span>
+  <span class="hl std">chain3</span><span class="hl kwb">=</span><span class="hl kwd">read.csv</span><span class="hl std">(fileNames[</span><span class="hl num">3</span><span class="hl std">])</span>
+
+
+
+
+  <span class="hl kwd">stopCluster</span><span class="hl std">(cl)</span>
+</pre></div>
+</div></div>
+</div>
+
+<p>Below is a comparison of the three reproductive numbers.</p>
+
+<div class="chunk" id="unnamed-chunk-8"><div class="rimage default"><img src="figure/unnamed-chunk-8.png" title="plot of chunk unnamed-chunk-8" alt="plot of chunk unnamed-chunk-8" class="plot" /></div></div>
+          </div>
+        </div>
+
+    </div>
+
+
+
+
+    <script src="./js/jquery.min.js"></script>
+    <script src="./bootstrap/js/bootstrap.min.js"></script>
+    <script type="text/javascript">
+    $(document).ready(function(){
+        $("table").addClass("table-striped");
+        $("table").addClass("table-bordered");
+      });
+
+      $(".code-button").click(function(){
+          $(this).next().animate({
+            opacity: 1,
+            left: "+=100",
+            height: "toggle"
+          }, 100, function() {
+          });
+      });
+    </script>
+</body>
+
+</html>
