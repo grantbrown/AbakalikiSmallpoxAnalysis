@@ -1,0 +1,392 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="icon" href="../../favicon.ico">
+
+    <title>Smallpox</title>
+    <link href="./bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link href="./css/smallpox.css" rel="stylesheet">
+
+  </head>
+
+  <body>
+    <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="http://grantbrown.github.io/libspatialSEIR/">libspatialSEIR</a>
+        </div>
+      </div>
+    </div>
+
+
+    <div id = "title-section" class = "container">
+      <div class="row">
+        <div class="col-sm-12">
+          <h1>Another look at the 1968 Abakaliki smallpox outbreak</h1>
+          <h4>A Spatial SEIR Modeling Approach</h4>
+          <h5><a href="http://www.public-health.uiowa.edu/people/grant-brown/">Grant Brown</a></h5>
+          <h5><a href="http://ams.mines.edu/ams.php/people/facPage?id=porter/">Aaron Porter</a></h5>
+          <h5>Document Compiled:
+<!--begin.rcode echo=FALSE, results='asis'
+          cat(as.character(Sys.Date()))
+end.rcode-->
+</h5>
+        </div>
+      </div>
+    </div>
+    <a id="toc-section-anchor" class="anchor"></a>
+    <div id="toc-section" class="container">
+      <h2>Table of Contents</h2>
+      <div class = "row">
+        <div class="col-sm-11 col-sm-offset-1">
+          <ol>
+            <li><a href="#introduction-sect">Introduction</a></li>
+            <li><a href="#analysis-1-sect">Analysis</a></li>
+            <li><a href="#conclusions-sect">Conclusions</a></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <a id="introduction-sect" class="anchor">
+      <h2>Introduction</h2></a>
+      <p>The original 1968 report by Thompson and Foege is probably the best summary, and is available
+      <a href="http://apps.who.int/iris/bitstream/10665/67462/1/WHO_SE_68.3.pdf?ua=1">here.</a></p>
+      <div class="row">
+        <div class="col-sm-11 offset-1">
+          <button class="btn btn-default code-button">Show/Hide Code Block</button>
+          <div class="code-and-output-block" style="display:none">
+<!--begin.rcode
+
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(coda)) 
+suppressPackageStartupMessages(library(spatialSEIR))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(parallel))
+
+## Define Document Compilation Parameters
+documentCompilationMode = "release"
+#documentCompilationMode = "debug"
+
+## Compute number of samples/batches
+numBurnInBatches =      ifelse(documentCompilationMode == "release", 1000,  1000)
+convergenceCriterion =  ifelse(documentCompilationMode == "release", 1.01,  5)
+convergenceSampleSize =  ifelse(documentCompilationMode == "release", 100000, 10000) 
+convergenceBatchSize =  ifelse(documentCompilationMode == "release", 100000, 10000) 
+minimumSamples =         ifelse(documentCompilationMode == "release", 300000, 50000) 
+extraR0Iterations =     ifelse(documentCompilationMode == "release", 500,   50)
+extraR0BatchSize =     ifelse(documentCompilationMode == "release", 1000,   1000)
+iterationStride =       ifelse(documentCompilationMode == "release", 1000,   100)
+totalSamples = 0
+
+interventionDate = as.Date("06-01-1968", "%m-%d-%Y")
+
+caseDat = read.csv("./Data/onsetData.csv")
+# Keep Only Tabernacle Members
+caseDat = caseDat[caseDat$Member == 1,]
+caseDates = as.Date(paste(caseDat$Onset, "1968",sep=""), format="%d%b%Y")
+rptDate = unique(caseDates); rptDate = rptDate[order(rptDate)]
+
+compoundList = unique(caseDat$Compound); compoundList = compoundList[order(compoundList)]
+I_star = matrix(0, nrow = length(unique(rptDate)), ncol = length(compoundList))
+
+
+for (i in 1:nrow(caseDat))
+{
+    rowIdx = which(rptDate == caseDates[i])
+    colIdx = which(compoundList == caseDat[i,]$Compound)
+    I_star[rowIdx, colIdx] = I_star[rowIdx, colIdx] + 1
+}
+
+xvec = c(I_star)
+datevec = rep(unique(rptDate), ncol(I_star))
+compoundvec = rep(compoundList, each = nrow(I_star))
+
+incidenceData = data.frame("X"=xvec, "Date"=datevec, "Compound"=as.character(compoundvec))
+
+incidence.barplot <- qplot(x=Date, y=X, fill=Compound,
+                       data=incidenceData, geom="bar", stat="identity",
+                       position="dodge")
+
+## End revisions
+
+uncumulate = function(x)
+{
+    out = c(x[2:length(x)]-x[1:(length(x)-1)])
+    ifelse(out >= 0, out, 0)
+}
+
+printDat = as.character(rptDate)
+
+
+figure1 = function()
+{
+
+  barplot(height = as.numeric(I_star), main = "Number of Infections Per Day")
+  axisLoc = seq(1, length(printDat), 2)
+  axis(side = 1, at = axisLoc, labels = printDat[axisLoc])
+}
+
+offsets = uncumulate(rptDate)
+I0 = I_star[1,]
+I_star = I_star[2:nrow(I_star),]
+rptDate = rptDate[2:length(rptDate)]
+maxIdx = nrow(I_star)
+
+end.rcode-->
+          </div>
+        </div>
+
+<!--begin.rcode dpi=150,fig.align='center',echo=FALSE
+  figure1()
+end.rcode-->
+      </div> <!-- End Row-->
+    </div> <!-- End Container-->
+
+    <div class="container">
+      <a id="analysis-1-sect" class="anchor">
+      <h2>Analysis</h2></a>
+      <div class="row">
+        <div class="col-sm-11 offset-1">
+          <button class="btn btn-default code-button">Show/Hide Code Block</button>
+          <div class="code-and-output-block" style="display:none">
+<!--begin.rcode
+
+# Compounds 1,2,3,4,5,7,8
+N = matrix(c(32,14,9,32,21,19,32), nrow = nrow(I_star),ncol = ncol(I_star),byrow=TRUE)
+X = matrix(1, nrow = ncol(I_star))
+
+hasIntervention = rptDate > interventionDate
+Z = cbind(hasIntervention*(rptDate-interventionDate))
+Z = Z[rep(1:nrow(Z), nrow(X)),,drop=FALSE]
+
+# Declare a function which can come up with several different starting values
+# for the model parameters. This will allow us to assess convergence.
+proposeParameters = function(seedVal, chainNumber)
+{
+    set.seed(seedVal)
+
+    # Declare prior parameters for the E to I and I to R probabilities.
+    # Middle prior from LF
+    priorAlpha_gammaEI = 20;
+    priorBeta_gammaEI = 100;
+    priorAlpha_gammaIR = 20;
+    priorBeta_gammaIR = 140;
+    # 2 to 21 day incubation period according to WHO
+    p_ei = 0.25 + rnorm(1, 0, 0.02)
+    # Up to 7 weeks even after recovery
+    p_ir = 0.14 + rnorm(1, 0, 0.01)
+    gamma_ei=-log(1-p_ei)
+    gamma_ir=-log(1-p_ir)
+
+    # Starting value for exposure regression parameters
+    beta = rep(0, ncol(X) + ncol(Z))
+    beta[1] = 2.5 + rnorm(1,0,0.5)
+
+    phi = 0.01 # Overdispersion precision
+
+    outFileName = paste("./chain_output_smpox_", chainNumber ,".txt", sep = "")
+
+    # Make a crude guess as to the true compartments:
+    # S_star, E_star, R_star, and thus S,E,I and R
+    DataModel = buildDataModel(I_star, type = "identity")
+    ExposureModel = buildExposureModel(X, Z, beta, betaPriorPrecision = c(0.5,0.5), betaPriorMean = c(0,0), offset=offsets)
+    ReinfectionModel = buildReinfectionModel("SEIR")
+    SamplingControl = buildSamplingControl(iterationStride=iterationStride)
+    InitContainer = buildInitialValueContainer(I_star, N,
+                                               S0 = c(N[1,]-I_star[1,]-1),
+                                               E0 = I0,
+                                               I0 = I0,
+                                               reinfection = FALSE,
+                                               dataType = "I_star")
+    DM = matrix(1, nrow = nrow(X), ncol = nrow(X)) - diag(nrow(X))
+    DM = DM / nrow(X) 
+    DistanceModel = buildDistanceModel(list(DM))
+    TransitionPriors = buildTransitionPriorsManually(priorAlpha_gammaEI,priorBeta_gammaEI,
+                                                     priorAlpha_gammaIR,priorBeta_gammaIR)
+    return(list(DataModel=DataModel,
+                ExposureModel=ExposureModel,
+                ReinfectionModel=ReinfectionModel,
+                SamplingControl=SamplingControl,
+                InitContainer=InitContainer,
+                DistanceModel=DistanceModel,
+                TransitionPriors=TransitionPriors,
+                outFileName=outFileName))
+}
+
+paramsList = list(list("estimateR0"=FALSE, "traceCompartments"=TRUE, "seedVal"=123123,"chainNumber"=1),
+                  list("estimateR0"=TRUE, "traceCompartments"=TRUE, "seedVal"=1299224,"chainNumber"=2),
+                  list("estimateR0"=FALSE,"traceCompartments"=FALSE, "seedVal"=123125,"chainNumber"=3))
+
+buildModels = function(params)
+{
+  library(spatialSEIR)
+  proposal <<- proposeParameters(params[["seedVal"]], params[["chainNumber"]])
+  SEIRmodel =  buildSEIRModel(proposal$outFileName,
+                              proposal$DataModel,
+                              proposal$ExposureModel,
+                              proposal$ReinfectionModel,
+                              proposal$DistanceModel,
+                              proposal$TransitionPriors,
+                              proposal$InitContainer,
+                              proposal$SamplingControl)
+  localModelObject <<- SEIRmodel
+  
+  
+  SEIRmodel$setRandomSeed(params[["seedVal"]])
+
+  # Do we need to keep track of compartment values for prediction?
+  # No sense doing this for all of the chains.
+  if (params[["traceCompartments"]])
+  {
+    SEIRmodel$setTrace(0) #There's only one spatial location
+  }
+
+  # Make a helper function to run each chain, as well as update the metropolis
+  # tuning parameters.
+  runSimulation <<- function(modelObject,
+                           numBatches=500,
+                           batchSize=20,
+                           targetAcceptanceRatio=0.2,
+                           tolerance=0.05,
+                           proportionChange = 0.1
+                          )
+  {
+      for (batch in 1:numBatches)
+      {
+          modelObject$simulate(batchSize)
+          modelObject$updateSamplingParameters(targetAcceptanceRatio,
+                                               tolerance,
+                                               proportionChange)
+      }
+  }
+
+  # Burn in tuning parameters
+  
+  runSimulation(SEIRmodel, numBatches = numBurnInBatches)
+  runSimulation(SEIRmodel, numBatches = numBurnInBatches, batchSize = 100)
+  
+  SEIRmodel$compartmentSamplingMode = 17
+  SEIRmodel$parameterSamplingMode=7
+  SEIRmodel$performHybridStep = 10
+  SEIRmodel$useDecorrelation = 50
+  # Run Simulation
+}
+
+
+additionalIterations = function(params)
+{ 
+    N = params[[1]]
+    localModelObject$simulate(N)
+}
+
+
+estimateR0 = function(params)
+{
+    extraIterations = params[[1]]
+    batchSize = params[[2]]
+
+    R0 = array(0, dim = c(nrow(localModelObject$I_star), 
+                          ncol(localModelObject$I_star), extraIterations))
+    empiricalR0 = R0
+    for (i in 1:(extraIterations))
+    {
+        localModelObject$simulate(batchSize)
+        for (j in (0:(nrow(localModelObject$I_star) - 1)))
+        {
+            R0[j,,i] = localModelObject$estimateR0(j)
+            empiricalR0[j,,i] = apply(localModelObject$getIntegratedGenerationMatrix(j), 1, sum)
+        }
+    }
+
+    R0Mean = apply(R0, 1:2, mean)
+    R0LB = apply(R0, 1:2, quantile, probs = 0.05)
+    R0UB = apply(R0, 1:2, quantile, probs = 0.95)
+
+    empiricalR0Mean = apply(empiricalR0, 1:2, hpdEst)
+    empiricalR0LB = apply(empiricalR0, 1:2, quantile, probs = 0.05)
+    empiricalR0UB = apply(empiricalR0, 1:2, quantile, probs = 0.95)
+
+    R0List = list(R0 = list(mean=R0Mean,
+                             LB=R0LB,
+                             UB=R0UB),
+                   empiricalR0 = list(mean = empiricalR0Mean,
+                                      LB = empiricalR0LB,
+                                      UB = empiricalR0UB)
+                   )
+    return(R0List)
+}
+
+iterationParams = list(list(20000),list(20000),list(20000))
+
+
+cl = makeCluster(3, outfile = "err.txt")
+clusterExport(cl, c("proposeParameters",
+                    "X","Z",
+                    "N","I_star","beta", "I0",
+                    "offsets", "iterationStride",
+                    "numBurnInBatches"))
+parLapply(cl, paramsList, buildModels)
+
+
+fileNames = paste("./chain_output_smpox_", 1:3 ,".txt", sep = "")
+conv = FALSE
+while (!conv)
+{
+    cat("Not converged, adding iterations...\n")
+    parLapply(cl, iterationParams, additionalIterations)
+    conv = checkConvergence(fileNames[1], fileNames[2], fileNames[3], maxVal=1.02)
+}
+
+
+
+R0Params = list(list(1000,100),
+              list(1000,100),
+              list(1000,100))
+
+R0Estimates = parLapply(cl, R0Params, estimateR0) 
+
+
+
+
+stopCluster(cl)
+end.rcode-->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="./js/jquery.min.js"></script>
+    <script src="./bootstrap/js/bootstrap.min.js"></script>
+    <script type="text/javascript">
+    $(document).ready(function(){
+        $("table").addClass("table-striped");
+        $("table").addClass("table-bordered");
+      });
+
+      $(".code-button").click(function(){
+          $(this).next().animate({
+            opacity: 1,
+            left: "+=100",
+            height: "toggle"
+          }, 100, function() {
+          });
+      });
+    </script>
+</body>
+
+</html>
