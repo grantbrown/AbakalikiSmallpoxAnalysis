@@ -1,2 +1,2 @@
 library(knitr)
-knit("./LekoneFinkenstadtAnalysis1.Rhtml")
+knit("./Smallpox1968.Rhtml")
