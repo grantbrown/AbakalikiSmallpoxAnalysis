@@ -91,8 +91,8 @@ suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(parallel))
 
 ## Define Document Compilation Parameters
-documentCompilationMode = "release"
-#documentCompilationMode = "debug"
+#documentCompilationMode = "release"
+documentCompilationMode = "debug"
 
 ## Compute number of samples/batches, and Gelman convergence diagnostic required.
 numBurnInBatches =      ifelse(documentCompilationMode == "release", 1000,  1000)
@@ -111,8 +111,10 @@ caseDat = read.csv("./Data/onsetData.csv")
 caseDat = caseDat[caseDat$Member == 1,]
 caseDates = as.Date(paste(caseDat$Onset, "1968",sep=""), format="%d%b%Y")
 
-## Get unique event dates, compoinds
-rptDate = unique(caseDates); rptDate = rptDate[order(rptDate)]
+## Get unique event dates, compoinds, make sure to pad with zeros since the 
+## epidemic did die out. 
+rptDate = c(unique(caseDates), max(unique(caseDates)) + seq(1, 35, 7)); 
+rptDate = rptDate[order(rptDate)]
 compoundList = unique(caseDat$Compound); compoundList = compoundList[order(compoundList)]
 
 ## Build new infectious matrix
