@@ -450,6 +450,13 @@ chain1=read.csv(fileNames[1])
 chain2=read.csv(fileNames[2])
 chain3=read.csv(fileNames[3])
 
+outDat=list(R0=R0,
+            effectiveR0=effectiveR0,
+            empiricalR0=empiricalR0,
+            chain1=chain1,
+            chain2=chain2,
+            chain3=chain3)
+save("outDat", file = "./Analysis1.Robj")
 
 
 
@@ -568,7 +575,13 @@ end.rcode-->
   chain2=read.csv(fileNames[2])
   chain3=read.csv(fileNames[3])
   
-  
+outDat=list(R0=R0,
+            effectiveR0=effectiveR0,
+            empiricalR0=empiricalR0,
+            chain1=chain1,
+            chain2=chain2,
+            chain3=chain3)
+save("outDat", file = "./Analysis1.Robj")
   
   
   stopCluster(cl)
