@@ -217,14 +217,14 @@ proposeParameters = function(seedVal, chainNumber, underspecified=FALSE)
       Z = Z[rep(1:nrow(Z), nrow(X)),,drop=FALSE]
       beta = rep(0, ncol(X) + ncol(Z))
       beta[1] = 2.5 + rnorm(1,0,0.5)
-      ExposureModel = buildExposureModel(X=X, Z=Z, beta=beta,
+      ExposureModel = buildExposureModel_depricated(X=X, Z=Z, beta=beta,
                                          betaPriorPrecision = c(0.5,0.5),
                                          betaPriorMean = c(0,0), offset=offsets)
     }
     else{
       beta = rep(0, ncol(X))
       beta[1] = 2.5 + rnorm(1,0,0.5)
-      ExposureModel = buildExposureModel(X=X, Z=NA, beta=beta,
+      ExposureModel = buildExposureModel_depricated(X=X, Z=NA, beta=beta,
                                          betaPriorPrecision = c(0.5),
                                          betaPriorMean = c(0), offset=offsets,
                                          nTpt = length(rptDate))
