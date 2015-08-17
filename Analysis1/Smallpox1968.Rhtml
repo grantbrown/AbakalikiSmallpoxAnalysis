@@ -180,8 +180,10 @@ end.rcode-->
           <div class="code-and-output-block" style="display:none">
 <!--begin.rcode
 
-# Compounds 1,2,3,4,5,7,8
-N = matrix(c(32,14,9,32,21,19,32), nrow = nrow(I_star),ncol = ncol(I_star),byrow=TRUE)
+# Compounds 1,2,3,4,5,7,9
+#N = matrix(c(32,14,9,32,21,19,32), nrow = nrow(I_star),ncol = ncol(I_star),byrow=TRUE)
+# Onlt FT members:
+N = matrix(c(33,14,10,4,7,5, 1), nrow = nrow(I_star),ncol = ncol(I_star),byrow=TRUE)
 X = matrix(1, nrow = ncol(I_star))
 
 # Declare a function which can come up with several different starting values
@@ -232,7 +234,7 @@ proposeParameters = function(seedVal, chainNumber, underspecified=FALSE)
     ReinfectionModel = buildReinfectionModel("SEIR")
     SamplingControl = buildSamplingControl(iterationStride=iterationStride)
     InitContainer = buildInitialValueContainer(I_star, N,
-                                               S0 = c(N[1,]-I_star[1,]-1),
+                                               S0 = c(N[1,]-I_star[1,]*2),
                                                E0 = I0,
                                                I0 = I0,
                                                reinfection = FALSE,
